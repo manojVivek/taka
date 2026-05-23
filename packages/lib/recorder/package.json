@@ -1,0 +1,32 @@
+{
+  "name": "@taka/recorder",
+  "version": "0.1.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "browser": "./dist/browser.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "browser": "./dist/browser.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src --ext .ts,.tsx",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@taka/types": "workspace:*",
+    "@taka/utils": "workspace:*",
+    "@taka/constants": "workspace:*"
+  },
+  "devDependencies": {
+    "@rollup/plugin-typescript": "^12.3.0",
+    "eslint-config-custom": "workspace:*",
+    "rollup": "^4.44.0",
+    "tsconfig": "workspace:*",
+    "typescript": "^5.8.3"
+  }
+}

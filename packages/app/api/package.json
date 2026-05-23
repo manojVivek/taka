@@ -1,0 +1,36 @@
+{
+  "name": "@taka/api",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "npx tsc",
+    "dev": "nodemon src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "eslint src --ext .ts,.tsx",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@taka/types": "workspace:*",
+    "@taka/utils": "workspace:*",
+    "@taka/constants": "workspace:*",
+    "@taka/player": "workspace:*",
+    "@taka/differ": "workspace:*",
+    "express": "^5.2.1",
+    "cors": "^2.8.5",
+    "helmet": "^8.1.0",
+    "p-queue": "^9.1.0",
+    "fs-extra": "^11.2.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/express-serve-static-core": "^5.1.1",
+    "@types/cors": "^2.8.17",
+    "@types/fs-extra": "^11.0.4",
+    "eslint-config-custom": "workspace:*",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "tsconfig": "workspace:*",
+    "typescript": "^5.8.3"
+  }
+}

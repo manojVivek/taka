@@ -1,0 +1,27 @@
+{
+  "name": "@taka/test-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev -p 3002",
+    "start": "next start -p 3002",
+    "automate": "node scripts/automate.mjs"
+  },
+  "dependencies": {
+    "@taka/recorder": "workspace:*",
+    "@taka/types": "workspace:*",
+    "next": "^16.1.6",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "puppeteer": "^24.37.5",
+    "puppeteer-core": "^24.37.5",
+    "tsconfig": "workspace:*",
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# Runtime data
+data/
+
+# Environment
+.env*
+
+# OS files
+.DS_Store
+
+# Claude Code local settings
+.claude/settings.local.json

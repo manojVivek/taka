@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-primary-800: #1e40af;
+  --color-primary-900: #1e3a8a;
+}
+
+@layer base {
+  html {
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+}
+
+@utility btn {
+  @apply px-4 py-2 rounded-lg font-medium text-sm transition-colors inline-flex items-center gap-1.5 shadow-sm;
+}
+
+@utility btn-primary {
+  @apply bg-primary-600 text-white hover:bg-primary-700;
+}
+
+@utility btn-secondary {
+  @apply bg-gray-100 text-gray-700 hover:bg-gray-200 shadow-none;
+}
+
+@utility btn-danger {
+  @apply bg-red-600 text-white hover:bg-red-700;
+}
+
+@utility btn-ghost {
+  @apply bg-transparent text-gray-600 hover:bg-gray-100 shadow-none;
+}
+
+@utility btn-sm {
+  @apply px-2.5 py-1.5 text-xs;
+}
+
+@utility card {
+  @apply bg-white rounded-xl border border-gray-200 shadow-sm;
+}
+
+@utility badge {
+  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+}
+
+@utility input {
+  @apply rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-shadow;
+}
+
+@utility table-header {
+  @apply px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
+}
+
+@utility table-cell {
+  @apply px-5 py-3.5;
+}
