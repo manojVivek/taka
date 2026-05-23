@@ -371,3 +371,19 @@ Always use `make` targets instead of running raw commands. The project Makefile 
 - `make reset` — Reset data directory
 
 When adding new frequently-used commands, add them as Makefile targets rather than running ad-hoc shell commands.
+
+### Keep docs in sync after every task
+
+After finishing any non-trivial change — new feature, refactor, API change, new package, removed flag — update the affected docs in the same task. Don't defer it. Documentation drift is treated as part of the change, not a follow-up.
+
+Concretely:
+
+- **`README.md`** (root) — package table, tech stack, project status, roadmap.
+- **`packages/<group>/<pkg>/README.md`** — for any package whose public API, file layout, dependencies, or behavior changed. Update the Usage example, API table, and Architecture table so they match the code.
+- **`CLAUDE.md`** — when something architectural changes (new package, new env var, new workflow command).
+- **API docs / endpoints table** — `packages/app/api/README.md` whenever a route is added, removed, or changes shape.
+- **Code examples in docs** — must compile against the current public API. If you change a function signature, grep for it in `**/README.md` and fix every snippet that uses it.
+
+After making code changes, do `grep -rln '<old API name>' **/*.md` to confirm no stale references remain. If a doc references a behavior you removed, either update it to the new behavior or delete the reference — don't leave it dangling.
+
+The point: a teammate (or a future agent) reading the docs should see what the code actually does today, not what it did before the last refactor.

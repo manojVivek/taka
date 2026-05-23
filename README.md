@@ -16,6 +16,7 @@ A PNPM + Turborepo monorepo with three layers: shared packages, libraries, and a
 | `@taka/recorder` | `packages/lib/recorder` | Browser session recording SDK | [README](packages/lib/recorder/README.md) |
 | `@taka/player` | `packages/lib/player` | Puppeteer-based replay engine | [README](packages/lib/player/README.md) |
 | `@taka/differ` | `packages/lib/differ` | Pixelmatch + Sharp visual diffing | [README](packages/lib/differ/README.md) |
+| `@taka/storage` | `packages/lib/storage` | Pluggable persistence layer (`FileStorage`, `LogOnlyStorage`) | [README](packages/lib/storage/README.md) |
 | `@taka/api` | `packages/app/api` | Express REST API + in-process job queue | [README](packages/app/api/README.md) |
 | `@taka/web` | `packages/app/web` | Next.js dashboard | [README](packages/app/web/README.md) |
 | `@taka/test-app` | `packages/app/test-app` | Sample notes app for recording targets | [README](packages/app/test-app/README.md) |
@@ -30,7 +31,7 @@ A PNPM + Turborepo monorepo with three layers: shared packages, libraries, and a
 - **Backend:** Express 5 with Helmet, CORS, p-queue
 - **Browser automation:** Puppeteer (headless Chrome)
 - **Image processing:** Sharp + Pixelmatch
-- **Storage:** Local filesystem (`./data/`) — no database for POC
+- **Storage:** Pluggable via `@taka/storage`. Default `FileStorage` writes under `./data/`; `LogOnlyStorage` is available for debug (`TAKA_STORAGE=logOnly`). Future backends (SQLite, S3, etc.) drop in behind the same interface.
 - **Cache/queue:** In-memory LRU + in-process p-queue (Redis ready)
 
 ## Quick Start
@@ -119,8 +120,13 @@ Most of the platform is functional end-to-end. You can record a session, replay 
   - Search and stats endpoints
   - Test execution (`/api/tests/run`, `/api/tests/:id`)
   - In-process job queue with `p-queue`
-  - Static file serving for screenshots and diffs
+  - Blob endpoints for screenshots and diffs (streamed through `@taka/storage`, not filesystem-bound)
   - Health/readiness probes
+- **Pluggable persistence** (`@taka/storage`)
+  - One `Storage` interface covering sessions, baselines, test results, screenshots, diffs, reports
+  - `FileStorage` (default) — local filesystem under `./data/`
+  - `LogOnlyStorage` — every call logged to stdout, nothing persisted (for debug)
+  - Selected at boot via `TAKA_STORAGE=file|logOnly`
 - **Web dashboard** (`@taka/web`)
   - Dashboard with stats and recent sessions
   - Sessions list with pagination, search, sort
@@ -145,10 +151,10 @@ Most of the platform is functional end-to-end. You can record a session, replay 
 ### Roadmap
 
 1. Build the test approval workflow so reviewers can promote a head screenshot to baseline
-2. Move test execution into `@taka/worker` so the API stops blocking on Puppeteer
-3. Add SQLite as a persistence option behind a feature flag
+2. Move test execution into `@taka/worker` so the API stops blocking on Puppeteer (worker consumes the same `@taka/storage` interface)
+3. Add a SQLite-backed `Storage` implementation in `@taka/storage` (drop-in alongside `FileStorage`)
 4. Add a GitHub Action that runs `pnpm taka test` and posts results on PRs
-5. Add S3 storage adapter and screenshot CDN
+5. Add an S3-backed `Storage` implementation + screenshot CDN
 6. Multi-user auth and per-project session isolation
 
 ## Storage Layout

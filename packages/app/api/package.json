@@ -16,17 +16,16 @@
     "@taka/constants": "workspace:*",
     "@taka/player": "workspace:*",
     "@taka/differ": "workspace:*",
+    "@taka/storage": "workspace:*",
     "express": "^5.2.1",
     "cors": "^2.8.5",
     "helmet": "^8.1.0",
-    "p-queue": "^9.1.0",
-    "fs-extra": "^11.2.0"
+    "p-queue": "^9.1.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/express-serve-static-core": "^5.1.1",
     "@types/cors": "^2.8.17",
-    "@types/fs-extra": "^11.0.4",
     "eslint-config-custom": "workspace:*",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",

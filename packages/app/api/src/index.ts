@@ -7,40 +7,76 @@ import { sessionRoutes } from './routes/sessions';
 import { testRoutes } from './routes/tests';
 import { healthRoutes } from './routes/health';
 import { STORAGE_PATHS } from '@taka/constants';
-import fs from 'fs-extra';
-import path from 'path';
+import { createStorage, type Storage, type StorageKind } from '@taka/storage';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Initialize services
-const sessionService = new SessionService();
-const testService = new TestService(sessionService);
+// Pick storage backend from env. Defaults to filesystem.
+const storageKind = (process.env.TAKA_STORAGE as StorageKind) || 'file';
+const storage: Storage = createStorage(storageKind, {
+  file: {
+    userSessionsPath: STORAGE_PATHS.userSessions,
+    testSessionsPath: STORAGE_PATHS.testSessions,
+  },
+});
 
-// Middleware
+console.log(`[API] Storage backend: ${storageKind}`);
+
+const sessionService = new SessionService(storage);
+const testService = new TestService(sessionService, storage);
+
 app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Add services to request object
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   req.sessionService = sessionService;
   req.testService = testService;
   next();
 });
 
-// Routes
 app.use('/api/health', healthRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/tests', testRoutes);
 
-// Static file serving for user sessions and test sessions
-app.use('/api/user-sessions', express.static(path.resolve(STORAGE_PATHS.userSessions)));
-app.use('/api/test-sessions', express.static(path.resolve(STORAGE_PATHS.testSessions)));
+// Blob endpoints — go through Storage instead of express.static so they work
+// with any backend (filesystem today, cloud object stores in future).
+app.get('/api/user-sessions/:sessionId/screenshots/:filename', async (req, res, next) => {
+  try {
+    const { sessionId, filename } = req.params;
+    const buf = await storage.getBaselineScreenshot(sessionId, filename);
+    if (!buf) return res.status(404).json({ error: 'Not found' });
+    res.contentType('image/png').send(buf);
+  } catch (err) {
+    next(err);
+  }
+});
 
-// Error handling middleware
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.get('/api/test-sessions/:testId/screenshots/:filename', async (req, res, next) => {
+  try {
+    const { testId, filename } = req.params;
+    const buf = await storage.getTestScreenshot(testId, filename);
+    if (!buf) return res.status(404).json({ error: 'Not found' });
+    res.contentType('image/png').send(buf);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/test-sessions/:testId/diffs/:filename', async (req, res, next) => {
+  try {
+    const { testId, filename } = req.params;
+    const buf = await storage.getTestDiff(testId, filename);
+    if (!buf) return res.status(404).json({ error: 'Not found' });
+    res.contentType('image/png').send(buf);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[API] Error:', err);
   res.status(500).json({
     error: 'Internal server error',
@@ -48,7 +84,6 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   });
 });
 
-// 404 handler
 app.use('/{*splat}', (req, res) => {
   res.status(404).json({
     error: 'Not found',
@@ -58,16 +93,9 @@ app.use('/{*splat}', (req, res) => {
 
 async function initializeServer() {
   try {
-    // Ensure data directories exist
-    await fs.ensureDir(STORAGE_PATHS.userSessions);
-    await fs.ensureDir(STORAGE_PATHS.testSessions);
+    await storage.initialize();
+    console.log('[API] Storage initialized');
 
-    console.log('[API] Data directories initialized');
-
-    // Initialize session service first (fast)
-    await sessionService.initialize();
-
-    // Start listening immediately so the server is responsive
     app.listen(PORT, () => {
       console.log(`[API] Server running on http://localhost:${PORT}`);
       console.log(`[API] Health check: http://localhost:${PORT}/api/health`);
@@ -75,36 +103,31 @@ async function initializeServer() {
       console.log(`[API] Tests API: http://localhost:${PORT}/api/tests`);
     });
 
-    // Initialize test service in background (launches Puppeteer, can be slow)
-    testService.initialize().then(() => {
-      console.log('[API] Test service initialized');
-    }).catch((error) => {
-      console.error('[API] Test service initialization failed:', error);
-    });
-
-    console.log('[API] Services initialized');
+    // Puppeteer launch happens in background — keeps the API responsive at boot.
+    testService
+      .initialize()
+      .then(() => console.log('[API] Test service initialized'))
+      .catch(error => console.error('[API] Test service initialization failed:', error));
   } catch (error) {
     console.error('[API] Failed to start server:', error);
     process.exit(1);
   }
 }
 
-// Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('[API] Received SIGTERM, shutting down gracefully');
-  await sessionService.cleanup();
   await testService.cleanup();
+  await storage.cleanup();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   console.log('[API] Received SIGINT, shutting down gracefully');
-  await sessionService.cleanup();
   await testService.cleanup();
+  await storage.cleanup();
   process.exit(0);
 });
 
-// Augment Express Request type
 declare global {
   namespace Express {
     interface Request {

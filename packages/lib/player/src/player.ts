@@ -1,9 +1,7 @@
 import puppeteer, { Browser, Page } from 'puppeteer-core';
-import type { SessionData, SessionEvent, Screenshot } from '@taka/types';
-import { generateId, sleep } from '@taka/utils';
-import path from 'path';
-import fs from 'fs-extra';
-import type { PlayerConfig, PlaybackResult, ReplayOptions } from './types';
+import type { SessionData, SessionEvent } from '@taka/types';
+import { sleep } from '@taka/utils';
+import type { PlayerConfig, PlaybackResult, ReplayOptions, ScreenshotMeta } from './types';
 import { ScreenshotCapture } from './screenshot';
 
 export class SessionPlayer {
@@ -51,14 +49,20 @@ export class SessionPlayer {
   async replay(sessionData: SessionData, options: ReplayOptions = {}): Promise<PlaybackResult> {
     console.log('[Player] Starting session replay:', sessionData.id);
 
-    if (!options.screenshotOutputPath) {
-      throw new Error('screenshotOutputPath is required');
-    }
-
-    const screenshotCapture = new ScreenshotCapture(options.screenshotOutputPath);
+    const screenshotCapture = new ScreenshotCapture();
     const startTime = Date.now();
-    const screenshots: Screenshot[] = [];
+    const screenshots: ScreenshotMeta[] = [];
     const errors: string[] = [];
+
+    const emit = async (p: Page, eventIndex: number, eventType: string) => {
+      const captured = await screenshotCapture.capture(p, eventIndex, eventType);
+      screenshots.push(captured.meta);
+      if (options.onScreenshot) {
+        await options.onScreenshot(captured.meta, captured.bytes);
+      }
+    };
+
+    let page: Page | undefined;
 
     try {
       await this.initialize();
@@ -67,7 +71,7 @@ export class SessionPlayer {
         throw new Error('Browser not initialized');
       }
 
-      const page = await this.browser.newPage();
+      page = await this.browser.newPage();
 
       // Set up viewport
       await page.setViewport(this.config.viewport);
@@ -91,13 +95,7 @@ export class SessionPlayer {
       });
 
       // Take initial screenshot
-      const initialScreenshot = await screenshotCapture.capture(
-        page,
-        sessionData.id,
-        0,
-        'initial'
-      );
-      screenshots.push(initialScreenshot);
+      await emit(page, 0, 'initial');
 
       // Replay events in sequence
       console.log('[Player] Replaying', sessionData.events.length, 'events');
@@ -110,13 +108,7 @@ export class SessionPlayer {
 
           // Take screenshot after each significant event
           if (this.shouldTakeScreenshot(event)) {
-            const screenshot = await screenshotCapture.capture(
-              page,
-              sessionData.id,
-              i + 1,
-              event.type
-            );
-            screenshots.push(screenshot);
+            await emit(page, i + 1, event.type);
           }
         } catch (error) {
           const errorMsg = `Error replaying event ${i}: ${error instanceof Error ? error.message : String(error)}`;
@@ -126,13 +118,7 @@ export class SessionPlayer {
       }
 
       // Take final screenshot
-      const finalScreenshot = await screenshotCapture.capture(
-        page,
-        sessionData.id,
-        sessionData.events.length,
-        'final'
-      );
-      screenshots.push(finalScreenshot);
+      await emit(page, sessionData.events.length, 'final');
 
       await page.close();
 

@@ -13,10 +13,10 @@ Today, `src/index.ts` is a single `console.log` line confirming the placeholder.
 When implemented, the worker will:
 
 - Pull queued test runs from a shared store (initially the filesystem, eventually Redis or a real queue)
-- Execute replays via `@taka/player`
-- Run pixel diffs via `@taka/differ`
-- Write results back to the same storage layout the API uses
-- Allow horizontal scaling by running multiple worker processes
+- Execute replays via `@taka/player` (already buffer-based, no filesystem coupling)
+- Run pixel diffs via `@taka/differ` (same)
+- Persist results through `@taka/storage` — the same `Storage` interface the API uses, so worker and API stay in sync regardless of which concrete backend is chosen at deploy time
+- Allow horizontal scaling by running multiple worker processes against a shared (e.g. cloud) storage backend
 
 ## Why split it out later
 
