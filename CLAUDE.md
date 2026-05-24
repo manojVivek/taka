@@ -3,6 +3,8 @@
 ## Project Overview
 Building Taka — an automated visual frontend testing platform that records user sessions, replays them as tests, and detects visual regressions without requiring manual test writing or maintenance.
 
+**Data hierarchy (current):** Every session and test lives under a parent **project**. Projects are a partitioning concept only — no authentication or per-project permissions. Every API request is project-scoped (`/api/projects/:projectId/...`); there is no implicit default project and no legacy unscoped routes — projects must be created explicitly via `POST /api/projects`, and the recorder requires a `projectId` at init time.
+
 ## Project Structure (Monorepo)
 
 ```

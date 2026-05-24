@@ -38,8 +38,18 @@ These exist purely so the recorder has real network traffic to capture.
 `src/components/RecorderProvider.tsx` wires up the recorder on the client:
 
 - Skips initialization if `window.__taka_replay` is set (so the player does not record itself during replay)
-- Configures the recorder with the local API endpoint and capture flags
+- Configures the recorder with the local API endpoint, project ID, and capture flags
 - Stores the recorder on `window.__takaRecorder` for debugging
+
+### Pointing at a project (required)
+
+The recorder requires a `projectId` to start. The test-app reads it from `NEXT_PUBLIC_TAKA_PROJECT_ID`:
+
+```bash
+NEXT_PUBLIC_TAKA_PROJECT_ID=notes-app pnpm dev
+```
+
+If the env var is unset, the test-app logs a clear error in the browser console and the recorder simply doesn't start (the rest of the notes UI keeps working). The project must already exist on the API server — create it with `POST /api/projects` or via the dashboard.
 
 ## Automation script
 

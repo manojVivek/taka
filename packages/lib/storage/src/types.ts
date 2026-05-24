@@ -1,7 +1,8 @@
-import type { SessionData, TestResult } from '@taka/types';
+import type { Project, SessionData, TestResult } from '@taka/types';
 
 export interface SessionSummary {
   id: string;
+  projectId: string;
   url: string;
   timestamp: number;
   eventCount: number;
@@ -66,43 +67,54 @@ export interface DiffReport {
   diffs: DiffReportEntry[];
 }
 
+export interface ProjectUpdate {
+  name?: string;
+  description?: string;
+}
+
 export interface Storage {
   initialize(): Promise<void>;
   cleanup(): Promise<void>;
 
-  // --- User sessions ---
-  saveSession(session: SessionData): Promise<void>;
-  getSession(id: string): Promise<SessionData | null>;
-  listSessions(opts?: ListOptions): Promise<ListResult<SessionSummary>>;
-  deleteSession(id: string): Promise<boolean>;
-  searchSessions(query: string): Promise<SessionSummary[]>;
-  getSessionStats(): Promise<SessionStats>;
+  // --- Projects ---
+  createProject(project: Project): Promise<void>;
+  getProject(id: string): Promise<Project | null>;
+  listProjects(): Promise<Project[]>;
+  updateProject(id: string, updates: ProjectUpdate): Promise<boolean>;
+  deleteProject(id: string): Promise<boolean>;
 
-  // --- Baselines (per session) ---
-  hasBaseline(sessionId: string): Promise<boolean>;
-  setBaselineFlag(sessionId: string, testId: string): Promise<void>;
-  putBaselineScreenshot(sessionId: string, filename: string, bytes: Buffer): Promise<void>;
-  listBaselineScreenshots(sessionId: string): Promise<ScreenshotRef[]>;
-  getBaselineScreenshot(sessionId: string, filename: string): Promise<Buffer | null>;
+  // --- User sessions (project-scoped) ---
+  saveSession(projectId: string, session: SessionData): Promise<void>;
+  getSession(projectId: string, id: string): Promise<SessionData | null>;
+  listSessions(projectId: string, opts?: ListOptions): Promise<ListResult<SessionSummary>>;
+  deleteSession(projectId: string, id: string): Promise<boolean>;
+  searchSessions(projectId: string, query: string): Promise<SessionSummary[]>;
+  getSessionStats(projectId: string): Promise<SessionStats>;
 
-  // --- Test runs ---
-  saveTestResult(testId: string, result: TestResult): Promise<void>;
-  getTestResult(testId: string): Promise<TestResult | null>;
+  // --- Baselines (project-scoped) ---
+  hasBaseline(projectId: string, sessionId: string): Promise<boolean>;
+  setBaselineFlag(projectId: string, sessionId: string, testId: string): Promise<void>;
+  putBaselineScreenshot(projectId: string, sessionId: string, filename: string, bytes: Buffer): Promise<void>;
+  listBaselineScreenshots(projectId: string, sessionId: string): Promise<ScreenshotRef[]>;
+  getBaselineScreenshot(projectId: string, sessionId: string, filename: string): Promise<Buffer | null>;
 
-  putTestScreenshot(testId: string, filename: string, bytes: Buffer): Promise<void>;
-  listTestScreenshots(testId: string): Promise<ScreenshotRef[]>;
-  getTestScreenshot(testId: string, filename: string): Promise<Buffer | null>;
+  // --- Test runs (project-scoped) ---
+  saveTestResult(projectId: string, testId: string, result: TestResult): Promise<void>;
+  getTestResult(projectId: string, testId: string): Promise<TestResult | null>;
 
-  putTestDiff(testId: string, filename: string, bytes: Buffer): Promise<void>;
-  listTestDiffs(testId: string): Promise<ScreenshotRef[]>;
-  getTestDiff(testId: string, filename: string): Promise<Buffer | null>;
+  putTestScreenshot(projectId: string, testId: string, filename: string, bytes: Buffer): Promise<void>;
+  listTestScreenshots(projectId: string, testId: string): Promise<ScreenshotRef[]>;
+  getTestScreenshot(projectId: string, testId: string, filename: string): Promise<Buffer | null>;
 
-  putTestDiffReport(testId: string, report: DiffReport): Promise<void>;
+  putTestDiff(projectId: string, testId: string, filename: string, bytes: Buffer): Promise<void>;
+  listTestDiffs(projectId: string, testId: string): Promise<ScreenshotRef[]>;
+  getTestDiff(projectId: string, testId: string, filename: string): Promise<Buffer | null>;
+
+  putTestDiffReport(projectId: string, testId: string, report: DiffReport): Promise<void>;
 }
 
 export interface FileStorageConfig {
-  userSessionsPath: string;
-  testSessionsPath: string;
+  projectsRoot: string;
 }
 
 export type StorageKind = 'file' | 'logOnly';

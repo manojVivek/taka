@@ -14,8 +14,7 @@ const DATA_ROOT = process.env.DATA_ROOT || path.resolve(__dirname, '../../../../
 
 export const STORAGE_PATHS = {
   data: DATA_ROOT,
-  userSessions: path.join(DATA_ROOT, 'user-sessions'),
-  testSessions: path.join(DATA_ROOT, 'test-sessions'),
+  projectsRoot: path.join(DATA_ROOT, 'projects'),
 };
 
 export const EVENT_TYPES = {

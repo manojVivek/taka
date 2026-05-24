@@ -15,6 +15,7 @@ export type {
   DiffReport,
   DiffReportEntry,
   FileStorageConfig,
+  ProjectUpdate,
 } from './types';
 
 export function createStorage(kind: StorageKind, config: { file?: FileStorageConfig }): Storage {

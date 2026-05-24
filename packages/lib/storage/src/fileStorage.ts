@@ -1,6 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
-import type { SessionData, TestResult } from '@taka/types';
+import type { Project, SessionData, TestResult } from '@taka/types';
 import type {
   Storage,
   SessionSummary,
@@ -10,56 +10,111 @@ import type {
   SessionStats,
   DiffReport,
   FileStorageConfig,
+  ProjectUpdate,
 } from './types';
 
 export class FileStorage implements Storage {
-  private userSessionsPath: string;
-  private testSessionsPath: string;
-  private sessionsIndex: Map<string, SessionSummary> = new Map();
+  private projectsRoot: string;
+  private projects: Map<string, Project> = new Map();
+  private sessionsByProject: Map<string, Map<string, SessionSummary>> = new Map();
 
   constructor(config: FileStorageConfig) {
-    this.userSessionsPath = path.resolve(config.userSessionsPath);
-    this.testSessionsPath = path.resolve(config.testSessionsPath);
+    this.projectsRoot = path.resolve(config.projectsRoot);
   }
 
   async initialize(): Promise<void> {
-    await fs.ensureDir(this.userSessionsPath);
-    await fs.ensureDir(this.testSessionsPath);
-    await this.loadSessionsIndex();
-    console.log(`[Storage:File] Initialized with ${this.sessionsIndex.size} sessions`);
+    await fs.ensureDir(this.projectsRoot);
+    await this.loadProjectsIndex();
+    for (const projectId of this.projects.keys()) {
+      await this.loadSessionsIndex(projectId);
+    }
+    console.log(
+      `[Storage:File] Initialized — ${this.projects.size} project(s), ` +
+        `${[...this.sessionsByProject.values()].reduce((sum, m) => sum + m.size, 0)} session(s) total`,
+    );
   }
 
   async cleanup(): Promise<void> {
-    await this.saveSessionsIndex();
+    await this.saveProjectsIndex();
+    for (const projectId of this.sessionsByProject.keys()) {
+      await this.saveSessionsIndex(projectId);
+    }
+  }
+
+  // === Projects ===
+
+  async createProject(project: Project): Promise<void> {
+    this.projects.set(project.id, project);
+    this.sessionsByProject.set(project.id, new Map());
+    await fs.ensureDir(this.userSessionsDir(project.id));
+    await fs.ensureDir(this.testSessionsDir(project.id));
+    await this.saveProjectsIndex();
+    console.log(`[Storage:File] Created project ${project.id} (${project.name})`);
+  }
+
+  async getProject(id: string): Promise<Project | null> {
+    return this.projects.get(id) ?? null;
+  }
+
+  async listProjects(): Promise<Project[]> {
+    return Array.from(this.projects.values()).sort((a, b) => a.createdAt - b.createdAt);
+  }
+
+  async updateProject(id: string, updates: ProjectUpdate): Promise<boolean> {
+    const existing = this.projects.get(id);
+    if (!existing) return false;
+    const next: Project = {
+      ...existing,
+      ...(updates.name !== undefined ? { name: updates.name } : {}),
+      ...(updates.description !== undefined ? { description: updates.description } : {}),
+    };
+    this.projects.set(id, next);
+    await this.saveProjectsIndex();
+    return true;
+  }
+
+  async deleteProject(id: string): Promise<boolean> {
+    if (!this.projects.has(id)) return false;
+    await fs.remove(this.projectDir(id));
+    this.projects.delete(id);
+    this.sessionsByProject.delete(id);
+    await this.saveProjectsIndex();
+    return true;
   }
 
   // === Sessions ===
 
-  async saveSession(session: SessionData): Promise<void> {
-    const sessionDir = path.join(this.userSessionsPath, session.id);
-    await fs.ensureDir(sessionDir);
-    const sessionPath = path.join(sessionDir, 'session.json');
-    await fs.writeJson(sessionPath, session, { spaces: 2 });
-
-    this.sessionsIndex.set(session.id, this.summarize(session));
-    await this.saveSessionsIndex();
+  async saveSession(projectId: string, session: SessionData): Promise<void> {
+    this.requireProject(projectId);
+    const dir = path.join(this.userSessionsDir(projectId), session.id);
+    await fs.ensureDir(dir);
+    const sessionPath = path.join(dir, 'session.json');
+    const persisted: SessionData = { ...session, projectId };
+    await fs.writeJson(sessionPath, persisted, { spaces: 2 });
+    this.sessionsForProject(projectId).set(session.id, this.summarize(projectId, persisted));
+    await this.saveSessionsIndex(projectId);
   }
 
-  async getSession(id: string): Promise<SessionData | null> {
-    const sessionPath = path.join(this.userSessionsPath, id, 'session.json');
+  async getSession(projectId: string, id: string): Promise<SessionData | null> {
+    const sessionPath = path.join(this.userSessionsDir(projectId), id, 'session.json');
     try {
       if (!(await fs.pathExists(sessionPath))) return null;
       return await fs.readJson(sessionPath);
     } catch (error) {
-      console.error('[Storage:File] Failed to read session:', id, error);
+      console.error('[Storage:File] Failed to read session:', projectId, id, error);
       return null;
     }
   }
 
-  async listSessions(opts: ListOptions = {}): Promise<ListResult<SessionSummary>> {
+  async listSessions(
+    projectId: string,
+    opts: ListOptions = {},
+  ): Promise<ListResult<SessionSummary>> {
     const { limit = 50, offset = 0, sortBy = 'timestamp', sortOrder = 'desc' } = opts;
+    const map = this.sessionsByProject.get(projectId);
+    if (!map) return { items: [], total: 0, limit, offset };
 
-    let items = Array.from(this.sessionsIndex.values());
+    let items = Array.from(map.values());
     items.sort((a, b) => {
       const av = a[sortBy];
       const bv = b[sortBy];
@@ -72,18 +127,21 @@ export class FileStorage implements Storage {
     return { items, total, limit, offset };
   }
 
-  async deleteSession(id: string): Promise<boolean> {
-    if (!this.sessionsIndex.has(id)) return false;
-    const sessionDir = path.join(this.userSessionsPath, id);
+  async deleteSession(projectId: string, id: string): Promise<boolean> {
+    const map = this.sessionsByProject.get(projectId);
+    if (!map || !map.has(id)) return false;
+    const sessionDir = path.join(this.userSessionsDir(projectId), id);
     await fs.remove(sessionDir);
-    this.sessionsIndex.delete(id);
-    await this.saveSessionsIndex();
+    map.delete(id);
+    await this.saveSessionsIndex(projectId);
     return true;
   }
 
-  async searchSessions(query: string): Promise<SessionSummary[]> {
+  async searchSessions(projectId: string, query: string): Promise<SessionSummary[]> {
+    const map = this.sessionsByProject.get(projectId);
+    if (!map) return [];
     const q = query.toLowerCase();
-    return Array.from(this.sessionsIndex.values()).filter(
+    return Array.from(map.values()).filter(
       s =>
         s.url.toLowerCase().includes(q) ||
         s.title?.toLowerCase().includes(q) ||
@@ -92,8 +150,9 @@ export class FileStorage implements Storage {
     );
   }
 
-  async getSessionStats(): Promise<SessionStats> {
-    const items = Array.from(this.sessionsIndex.values());
+  async getSessionStats(projectId: string): Promise<SessionStats> {
+    const map = this.sessionsByProject.get(projectId);
+    const items = map ? Array.from(map.values()) : [];
     if (items.length === 0) {
       return {
         totalSessions: 0,
@@ -122,8 +181,8 @@ export class FileStorage implements Storage {
 
   // === Baselines ===
 
-  async hasBaseline(sessionId: string): Promise<boolean> {
-    const dir = this.baselineDir(sessionId);
+  async hasBaseline(projectId: string, sessionId: string): Promise<boolean> {
+    const dir = this.baselineDir(projectId, sessionId);
     try {
       if (!(await fs.pathExists(dir))) return false;
       const files = await fs.readdir(dir);
@@ -133,45 +192,59 @@ export class FileStorage implements Storage {
     }
   }
 
-  async setBaselineFlag(sessionId: string, testId: string): Promise<void> {
-    const sessionPath = path.join(this.userSessionsPath, sessionId, 'session.json');
+  async setBaselineFlag(projectId: string, sessionId: string, testId: string): Promise<void> {
+    const sessionPath = path.join(this.userSessionsDir(projectId), sessionId, 'session.json');
     if (!(await fs.pathExists(sessionPath))) return;
     const data = await fs.readJson(sessionPath);
     data.hasBaseline = true;
     data.baselineTestId = testId;
     await fs.writeJson(sessionPath, data, { spaces: 2 });
 
-    const existing = this.sessionsIndex.get(sessionId);
-    if (existing) {
-      this.sessionsIndex.set(sessionId, { ...existing, hasBaseline: true });
-      await this.saveSessionsIndex();
+    const map = this.sessionsByProject.get(projectId);
+    const existing = map?.get(sessionId);
+    if (map && existing) {
+      map.set(sessionId, { ...existing, hasBaseline: true });
+      await this.saveSessionsIndex(projectId);
     }
   }
 
-  async putBaselineScreenshot(sessionId: string, filename: string, bytes: Buffer): Promise<void> {
-    const dir = this.baselineDir(sessionId);
+  async putBaselineScreenshot(
+    projectId: string,
+    sessionId: string,
+    filename: string,
+    bytes: Buffer,
+  ): Promise<void> {
+    const dir = this.baselineDir(projectId, sessionId);
     await fs.ensureDir(dir);
     await fs.writeFile(path.join(dir, filename), bytes);
   }
 
-  async listBaselineScreenshots(sessionId: string): Promise<ScreenshotRef[]> {
-    return this.listPngsIn(this.baselineDir(sessionId));
+  async listBaselineScreenshots(projectId: string, sessionId: string): Promise<ScreenshotRef[]> {
+    return this.listPngsIn(this.baselineDir(projectId, sessionId));
   }
 
-  async getBaselineScreenshot(sessionId: string, filename: string): Promise<Buffer | null> {
-    return this.readFileOrNull(path.join(this.baselineDir(sessionId), filename));
+  async getBaselineScreenshot(
+    projectId: string,
+    sessionId: string,
+    filename: string,
+  ): Promise<Buffer | null> {
+    return this.readFileOrNull(path.join(this.baselineDir(projectId, sessionId), filename));
   }
 
   // === Test runs ===
 
-  async saveTestResult(testId: string, result: TestResult): Promise<void> {
-    const dir = path.join(this.testSessionsPath, testId);
+  async saveTestResult(projectId: string, testId: string, result: TestResult): Promise<void> {
+    const dir = path.join(this.testSessionsDir(projectId), testId);
     await fs.ensureDir(dir);
-    await fs.writeJson(path.join(dir, 'result.json'), result, { spaces: 2 });
+    await fs.writeJson(
+      path.join(dir, 'result.json'),
+      { ...result, projectId },
+      { spaces: 2 },
+    );
   }
 
-  async getTestResult(testId: string): Promise<TestResult | null> {
-    const p = path.join(this.testSessionsPath, testId, 'result.json');
+  async getTestResult(projectId: string, testId: string): Promise<TestResult | null> {
+    const p = path.join(this.testSessionsDir(projectId), testId, 'result.json');
     try {
       if (!(await fs.pathExists(p))) return null;
       return await fs.readJson(p);
@@ -180,52 +253,103 @@ export class FileStorage implements Storage {
     }
   }
 
-  async putTestScreenshot(testId: string, filename: string, bytes: Buffer): Promise<void> {
-    const dir = this.testScreenshotsDir(testId);
+  async putTestScreenshot(
+    projectId: string,
+    testId: string,
+    filename: string,
+    bytes: Buffer,
+  ): Promise<void> {
+    const dir = this.testScreenshotsDir(projectId, testId);
     await fs.ensureDir(dir);
     await fs.writeFile(path.join(dir, filename), bytes);
   }
 
-  async listTestScreenshots(testId: string): Promise<ScreenshotRef[]> {
-    return this.listPngsIn(this.testScreenshotsDir(testId));
+  async listTestScreenshots(projectId: string, testId: string): Promise<ScreenshotRef[]> {
+    return this.listPngsIn(this.testScreenshotsDir(projectId, testId));
   }
 
-  async getTestScreenshot(testId: string, filename: string): Promise<Buffer | null> {
-    return this.readFileOrNull(path.join(this.testScreenshotsDir(testId), filename));
+  async getTestScreenshot(
+    projectId: string,
+    testId: string,
+    filename: string,
+  ): Promise<Buffer | null> {
+    return this.readFileOrNull(
+      path.join(this.testScreenshotsDir(projectId, testId), filename),
+    );
   }
 
-  async putTestDiff(testId: string, filename: string, bytes: Buffer): Promise<void> {
-    const dir = this.testDiffsDir(testId);
+  async putTestDiff(
+    projectId: string,
+    testId: string,
+    filename: string,
+    bytes: Buffer,
+  ): Promise<void> {
+    const dir = this.testDiffsDir(projectId, testId);
     await fs.ensureDir(dir);
     await fs.writeFile(path.join(dir, filename), bytes);
   }
 
-  async listTestDiffs(testId: string): Promise<ScreenshotRef[]> {
-    return this.listPngsIn(this.testDiffsDir(testId));
+  async listTestDiffs(projectId: string, testId: string): Promise<ScreenshotRef[]> {
+    return this.listPngsIn(this.testDiffsDir(projectId, testId));
   }
 
-  async getTestDiff(testId: string, filename: string): Promise<Buffer | null> {
-    return this.readFileOrNull(path.join(this.testDiffsDir(testId), filename));
+  async getTestDiff(
+    projectId: string,
+    testId: string,
+    filename: string,
+  ): Promise<Buffer | null> {
+    return this.readFileOrNull(path.join(this.testDiffsDir(projectId, testId), filename));
   }
 
-  async putTestDiffReport(testId: string, report: DiffReport): Promise<void> {
-    const dir = this.testDiffsDir(testId);
+  async putTestDiffReport(
+    projectId: string,
+    testId: string,
+    report: DiffReport,
+  ): Promise<void> {
+    const dir = this.testDiffsDir(projectId, testId);
     await fs.ensureDir(dir);
     await fs.writeJson(path.join(dir, 'report.json'), report, { spaces: 2 });
   }
 
   // === Internals ===
 
-  private baselineDir(sessionId: string): string {
-    return path.join(this.userSessionsPath, sessionId, 'screenshots');
+  private projectDir(projectId: string): string {
+    return path.join(this.projectsRoot, projectId);
   }
 
-  private testScreenshotsDir(testId: string): string {
-    return path.join(this.testSessionsPath, testId, 'screenshots');
+  private userSessionsDir(projectId: string): string {
+    return path.join(this.projectDir(projectId), 'user-sessions');
   }
 
-  private testDiffsDir(testId: string): string {
-    return path.join(this.testSessionsPath, testId, 'diffs');
+  private testSessionsDir(projectId: string): string {
+    return path.join(this.projectDir(projectId), 'test-sessions');
+  }
+
+  private baselineDir(projectId: string, sessionId: string): string {
+    return path.join(this.userSessionsDir(projectId), sessionId, 'screenshots');
+  }
+
+  private testScreenshotsDir(projectId: string, testId: string): string {
+    return path.join(this.testSessionsDir(projectId), testId, 'screenshots');
+  }
+
+  private testDiffsDir(projectId: string, testId: string): string {
+    return path.join(this.testSessionsDir(projectId), testId, 'diffs');
+  }
+
+  private sessionsForProject(projectId: string): Map<string, SessionSummary> {
+    let map = this.sessionsByProject.get(projectId);
+    if (!map) {
+      map = new Map();
+      this.sessionsByProject.set(projectId, map);
+    }
+    return map;
+  }
+
+  private requireProject(projectId: string): void {
+    if (!this.projects.has(projectId)) {
+      throw new Error(`Unknown project: ${projectId}`);
+    }
   }
 
   private async readFileOrNull(p: string): Promise<Buffer | null> {
@@ -262,9 +386,10 @@ export class FileStorage implements Storage {
     }
   }
 
-  private summarize(session: SessionData): SessionSummary {
+  private summarize(projectId: string, session: SessionData): SessionSummary {
     return {
       id: session.id,
+      projectId,
       url: session.url,
       timestamp: session.timestamp,
       eventCount: session.events.length,
@@ -277,49 +402,124 @@ export class FileStorage implements Storage {
     };
   }
 
-  private async loadSessionsIndex(): Promise<void> {
-    const indexPath = path.join(this.userSessionsPath, 'index.json');
+  // ---- Projects index ----
+
+  private projectsIndexPath(): string {
+    return path.join(this.projectsRoot, 'projects.json');
+  }
+
+  private async loadProjectsIndex(): Promise<void> {
+    const p = this.projectsIndexPath();
     try {
-      if (await fs.pathExists(indexPath)) {
-        const data = await fs.readJson(indexPath);
-        this.sessionsIndex = new Map(data.sessions || []);
+      if (await fs.pathExists(p)) {
+        const data = await fs.readJson(p);
+        this.projects = new Map(data.projects || []);
         return;
       }
     } catch (error) {
-      console.warn('[Storage:File] Failed to load index, rebuilding:', error);
+      console.warn('[Storage:File] Failed to load projects index, rebuilding:', error);
     }
-    await this.rebuildIndex();
+    await this.rebuildProjectsIndex();
   }
 
-  private async saveSessionsIndex(): Promise<void> {
-    const indexPath = path.join(this.userSessionsPath, 'index.json');
+  private async saveProjectsIndex(): Promise<void> {
     try {
       await fs.writeJson(
-        indexPath,
-        { lastUpdated: Date.now(), sessions: Array.from(this.sessionsIndex.entries()) },
+        this.projectsIndexPath(),
+        { lastUpdated: Date.now(), projects: Array.from(this.projects.entries()) },
         { spaces: 2 },
       );
     } catch (error) {
-      console.error('[Storage:File] Failed to save index:', error);
+      console.error('[Storage:File] Failed to save projects index:', error);
     }
   }
 
-  private async rebuildIndex(): Promise<void> {
+  private async rebuildProjectsIndex(): Promise<void> {
     try {
-      const entries = await fs.readdir(this.userSessionsPath);
+      if (!(await fs.pathExists(this.projectsRoot))) return;
+      const entries = await fs.readdir(this.projectsRoot);
+      for (const entry of entries) {
+        if (entry === 'projects.json') continue;
+        const dir = path.join(this.projectsRoot, entry);
+        const stat = await fs.stat(dir).catch(() => null);
+        if (!stat?.isDirectory()) continue;
+        // Reconstruct a project record with best-effort metadata
+        this.projects.set(entry, {
+          id: entry,
+          name: entry,
+          createdAt: stat.birthtime.getTime() || Date.now(),
+        });
+      }
+    } catch (error) {
+      console.error('[Storage:File] Failed to rebuild projects index:', error);
+    }
+  }
+
+  // ---- Per-project sessions index ----
+
+  private sessionsIndexPath(projectId: string): string {
+    return path.join(this.userSessionsDir(projectId), 'index.json');
+  }
+
+  private async loadSessionsIndex(projectId: string): Promise<void> {
+    const p = this.sessionsIndexPath(projectId);
+    try {
+      if (await fs.pathExists(p)) {
+        const data = await fs.readJson(p);
+        this.sessionsByProject.set(projectId, new Map(data.sessions || []));
+        return;
+      }
+    } catch (error) {
+      console.warn(
+        `[Storage:File] Failed to load sessions index for project ${projectId}, rebuilding:`,
+        error,
+      );
+    }
+    await this.rebuildSessionsIndex(projectId);
+  }
+
+  private async saveSessionsIndex(projectId: string): Promise<void> {
+    const map = this.sessionsByProject.get(projectId);
+    if (!map) return;
+    try {
+      await fs.ensureDir(this.userSessionsDir(projectId));
+      await fs.writeJson(
+        this.sessionsIndexPath(projectId),
+        { lastUpdated: Date.now(), sessions: Array.from(map.entries()) },
+        { spaces: 2 },
+      );
+    } catch (error) {
+      console.error(
+        `[Storage:File] Failed to save sessions index for project ${projectId}:`,
+        error,
+      );
+    }
+  }
+
+  private async rebuildSessionsIndex(projectId: string): Promise<void> {
+    const map = new Map<string, SessionSummary>();
+    this.sessionsByProject.set(projectId, map);
+    try {
+      const dir = this.userSessionsDir(projectId);
+      if (!(await fs.pathExists(dir))) return;
+      const entries = await fs.readdir(dir);
       for (const entry of entries) {
         if (entry === 'index.json') continue;
-        const sessionPath = path.join(this.userSessionsPath, entry, 'session.json');
+        const sessionPath = path.join(dir, entry, 'session.json');
         if (!(await fs.pathExists(sessionPath))) continue;
         try {
           const session: SessionData = await fs.readJson(sessionPath);
-          this.sessionsIndex.set(session.id, this.summarize(session));
+          map.set(session.id, this.summarize(projectId, session));
         } catch (error) {
           console.warn('[Storage:File] Skipped malformed session:', entry, error);
         }
       }
     } catch (error) {
-      console.error('[Storage:File] Failed to rebuild index:', error);
+      console.error(
+        `[Storage:File] Failed to rebuild sessions index for project ${projectId}:`,
+        error,
+      );
     }
   }
+
 }

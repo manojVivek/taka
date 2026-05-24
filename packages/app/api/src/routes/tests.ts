@@ -1,8 +1,12 @@
 import express from 'express';
 
-const router = express.Router();
+const router = express.Router({ mergeParams: true });
 
-// GET /api/tests - List all tests
+function projectId(req: express.Request): string {
+  return (req.params as { projectId: string }).projectId;
+}
+
+// GET / — List tests
 router.get('/', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
@@ -17,7 +21,7 @@ router.get('/', async (req, res) => {
       });
     }
 
-    const result = await req.testService.getAllTests({
+    const result = await req.testService.getAllTests(projectId(req), {
       limit,
       offset,
       status: status as any,
@@ -33,10 +37,10 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/tests/queue - Get queue status
+// GET /queue
 router.get('/queue', async (req, res) => {
   try {
-    const queueStatus = await req.testService.getQueueStatus();
+    const queueStatus = await req.testService.getQueueStatus(projectId(req));
     res.json(queueStatus);
   } catch (error) {
     console.error('[Tests API] Failed to get queue status:', error);
@@ -47,16 +51,15 @@ router.get('/queue', async (req, res) => {
   }
 });
 
-// GET /api/tests/:id - Get specific test status
+// GET /:id — Test execution status
 router.get('/:id', async (req, res) => {
   try {
-    const testId = req.params.id;
-    const testExecution = await req.testService.getTestStatus(testId);
+    const testExecution = await req.testService.getTestStatus(projectId(req), req.params.id);
 
     if (!testExecution) {
       return res.status(404).json({
         error: 'Test not found',
-        message: `Test with ID ${testId} does not exist`,
+        message: `Test with ID ${req.params.id} does not exist`,
       });
     }
 
@@ -70,16 +73,15 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// GET /api/tests/:id/result - Get test result
+// GET /:id/result
 router.get('/:id/result', async (req, res) => {
   try {
-    const testId = req.params.id;
-    const result = await req.testService.getTestResult(testId);
+    const result = await req.testService.getTestResult(projectId(req), req.params.id);
 
     if (!result) {
       return res.status(404).json({
         error: 'Test result not found',
-        message: `Test result for ID ${testId} does not exist`,
+        message: `Test result for ID ${req.params.id} does not exist`,
       });
     }
 
@@ -93,7 +95,7 @@ router.get('/:id/result', async (req, res) => {
   }
 });
 
-// POST /api/tests/compare - Compare screenshots between sessions
+// POST /compare — Compare two sessions' baselines
 router.post('/compare', async (req, res) => {
   try {
     const { baseSessionId, headSessionId, threshold, ignoreRegions } = req.body;
@@ -111,9 +113,10 @@ router.post('/compare', async (req, res) => {
     };
 
     const comparisonId = await req.testService.compareScreenshots(
+      projectId(req),
       baseSessionId,
       headSessionId,
-      options
+      options,
     );
 
     res.status(202).json({
@@ -130,7 +133,7 @@ router.post('/compare', async (req, res) => {
   }
 });
 
-// POST /api/tests/run - Run test for session data
+// POST /run — Run a test for ad-hoc session data
 router.post('/run', async (req, res) => {
   try {
     const sessionData = req.body.sessionData;
@@ -143,13 +146,14 @@ router.post('/run', async (req, res) => {
       });
     }
 
-    const testId = await req.testService.runTest(sessionData, options);
+    const pid = projectId(req);
+    const testId = await req.testService.runTest(pid, sessionData, options);
 
     res.status(202).json({
       success: true,
       testId,
       message: 'Test started successfully',
-      statusUrl: `/api/tests/${testId}`,
+      statusUrl: `/api/projects/${pid}/tests/${testId}`,
     });
   } catch (error) {
     console.error('[Tests API] Failed to run test:', error);

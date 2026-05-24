@@ -5,6 +5,7 @@ import { SessionService } from './services/sessionService';
 import { TestService } from './services/testService';
 import { sessionRoutes } from './routes/sessions';
 import { testRoutes } from './routes/tests';
+import { projectRoutes } from './routes/projects';
 import { healthRoutes } from './routes/health';
 import { STORAGE_PATHS } from '@taka/constants';
 import { createStorage, type Storage, type StorageKind } from '@taka/storage';
@@ -12,13 +13,9 @@ import { createStorage, type Storage, type StorageKind } from '@taka/storage';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Pick storage backend from env. Defaults to filesystem.
 const storageKind = (process.env.TAKA_STORAGE as StorageKind) || 'file';
 const storage: Storage = createStorage(storageKind, {
-  file: {
-    userSessionsPath: STORAGE_PATHS.userSessions,
-    testSessionsPath: STORAGE_PATHS.testSessions,
-  },
+  file: { projectsRoot: STORAGE_PATHS.projectsRoot },
 });
 
 console.log(`[API] Storage backend: ${storageKind}`);
@@ -37,44 +34,81 @@ app.use((req, _res, next) => {
   next();
 });
 
+// 404 if the referenced project doesn't exist. Mounted in front of every
+// route that takes :projectId so storage doesn't need to throw.
+async function ensureProject(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+) {
+  const projectId = (req.params as { projectId?: string }).projectId;
+  if (!projectId) {
+    return res.status(400).json({ error: 'Missing project id' });
+  }
+  const project = await sessionService.getProject(projectId);
+  if (!project) {
+    return res.status(404).json({
+      error: 'Project not found',
+      message: `No project with id "${projectId}". Create one with POST /api/projects.`,
+    });
+  }
+  next();
+}
+
 app.use('/api/health', healthRoutes);
-app.use('/api/sessions', sessionRoutes);
-app.use('/api/tests', testRoutes);
 
-// Blob endpoints — go through Storage instead of express.static so they work
-// with any backend (filesystem today, cloud object stores in future).
-app.get('/api/user-sessions/:sessionId/screenshots/:filename', async (req, res, next) => {
-  try {
-    const { sessionId, filename } = req.params;
-    const buf = await storage.getBaselineScreenshot(sessionId, filename);
-    if (!buf) return res.status(404).json({ error: 'Not found' });
-    res.contentType('image/png').send(buf);
-  } catch (err) {
-    next(err);
-  }
-});
+// Projects CRUD (its own handlers check existence)
+app.use('/api/projects', projectRoutes);
 
-app.get('/api/test-sessions/:testId/screenshots/:filename', async (req, res, next) => {
-  try {
-    const { testId, filename } = req.params;
-    const buf = await storage.getTestScreenshot(testId, filename);
-    if (!buf) return res.status(404).json({ error: 'Not found' });
-    res.contentType('image/png').send(buf);
-  } catch (err) {
-    next(err);
-  }
-});
+// Project-scoped routers — gated by ensureProject
+app.use('/api/projects/:projectId/sessions', ensureProject, sessionRoutes);
+app.use('/api/projects/:projectId/tests', ensureProject, testRoutes);
 
-app.get('/api/test-sessions/:testId/diffs/:filename', async (req, res, next) => {
-  try {
-    const { testId, filename } = req.params;
-    const buf = await storage.getTestDiff(testId, filename);
-    if (!buf) return res.status(404).json({ error: 'Not found' });
-    res.contentType('image/png').send(buf);
-  } catch (err) {
-    next(err);
-  }
-});
+// Blob endpoints — project-scoped only
+app.get(
+  '/api/projects/:projectId/user-sessions/:sessionId/screenshots/:filename',
+  ensureProject,
+  async (req, res, next) => {
+    try {
+      const { projectId, sessionId, filename } = req.params as Record<string, string>;
+      const buf = await storage.getBaselineScreenshot(projectId, sessionId, filename);
+      if (!buf) return res.status(404).json({ error: 'Not found' });
+      res.contentType('image/png').send(buf);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+app.get(
+  '/api/projects/:projectId/test-sessions/:testId/screenshots/:filename',
+  ensureProject,
+  async (req, res, next) => {
+    try {
+      const { projectId, testId, filename } = req.params as Record<string, string>;
+      const buf = await storage.getTestScreenshot(projectId, testId, filename);
+      if (!buf) return res.status(404).json({ error: 'Not found' });
+      res.contentType('image/png').send(buf);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+app.get(
+  '/api/projects/:projectId/test-sessions/:testId/diffs/:filename',
+  ensureProject,
+  async (req, res, next) => {
+    try {
+      const { projectId, testId, filename } = req.params as Record<string, string>;
+      const buf = await storage.getTestDiff(projectId, testId, filename);
+      if (!buf) return res.status(404).json({ error: 'Not found' });
+      res.contentType('image/png').send(buf);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[API] Error:', err);
@@ -98,12 +132,12 @@ async function initializeServer() {
 
     app.listen(PORT, () => {
       console.log(`[API] Server running on http://localhost:${PORT}`);
-      console.log(`[API] Health check: http://localhost:${PORT}/api/health`);
-      console.log(`[API] Sessions API: http://localhost:${PORT}/api/sessions`);
-      console.log(`[API] Tests API: http://localhost:${PORT}/api/tests`);
+      console.log(`[API] Health check:  http://localhost:${PORT}/api/health`);
+      console.log(`[API] Projects API:  http://localhost:${PORT}/api/projects`);
+      console.log(`[API] Sessions API:  http://localhost:${PORT}/api/projects/<id>/sessions`);
+      console.log(`[API] Tests API:     http://localhost:${PORT}/api/projects/<id>/tests`);
     });
 
-    // Puppeteer launch happens in background — keeps the API responsive at boot.
     testService
       .initialize()
       .then(() => console.log('[API] Test service initialized'))

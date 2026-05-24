@@ -13,9 +13,8 @@ router.get('/', (req, res) => {
 
 router.get('/ready', async (req, res) => {
   try {
-    // Check if services are ready
-    const stats = await req.sessionService.getSessionStats();
-    
+    const projects = await req.sessionService.listProjects();
+
     res.json({
       status: 'ready',
       timestamp: new Date().toISOString(),
@@ -23,7 +22,7 @@ router.get('/ready', async (req, res) => {
         sessions: 'ready',
         tests: 'ready',
       },
-      stats,
+      projects: projects.length,
     });
   } catch (error) {
     res.status(503).json({

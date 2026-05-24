@@ -1,30 +1,58 @@
-import type { SessionData } from '@taka/types';
+import type { Project, SessionData } from '@taka/types';
 import type {
   Storage,
   SessionSummary,
   ListOptions,
   SessionStats,
   ScreenshotRef,
+  ProjectUpdate,
 } from '@taka/storage';
 
 export class SessionService {
   constructor(private storage: Storage) {}
 
-  async saveSession(sessionData: SessionData): Promise<void> {
-    return this.storage.saveSession(sessionData);
+  // --- Projects ---
+
+  async createProject(project: Project): Promise<void> {
+    return this.storage.createProject(project);
   }
 
-  async getSession(id: string): Promise<SessionData | null> {
-    return this.storage.getSession(id);
+  async getProject(id: string): Promise<Project | null> {
+    return this.storage.getProject(id);
   }
 
-  async getAllSessions(opts: ListOptions = {}): Promise<{
+  async listProjects(): Promise<Project[]> {
+    return this.storage.listProjects();
+  }
+
+  async updateProject(id: string, updates: ProjectUpdate): Promise<boolean> {
+    return this.storage.updateProject(id, updates);
+  }
+
+  async deleteProject(id: string): Promise<boolean> {
+    return this.storage.deleteProject(id);
+  }
+
+  // --- Sessions ---
+
+  async saveSession(projectId: string, sessionData: SessionData): Promise<void> {
+    return this.storage.saveSession(projectId, sessionData);
+  }
+
+  async getSession(projectId: string, id: string): Promise<SessionData | null> {
+    return this.storage.getSession(projectId, id);
+  }
+
+  async getAllSessions(
+    projectId: string,
+    opts: ListOptions = {},
+  ): Promise<{
     sessions: SessionSummary[];
     total: number;
     limit: number;
     offset: number;
   }> {
-    const result = await this.storage.listSessions(opts);
+    const result = await this.storage.listSessions(projectId, opts);
     return {
       sessions: result.items,
       total: result.total,
@@ -33,27 +61,34 @@ export class SessionService {
     };
   }
 
-  async deleteSession(id: string): Promise<boolean> {
-    return this.storage.deleteSession(id);
+  async deleteSession(projectId: string, id: string): Promise<boolean> {
+    return this.storage.deleteSession(projectId, id);
   }
 
-  async searchSessions(query: string): Promise<SessionSummary[]> {
-    return this.storage.searchSessions(query);
+  async searchSessions(projectId: string, query: string): Promise<SessionSummary[]> {
+    return this.storage.searchSessions(projectId, query);
   }
 
-  async getSessionStats(): Promise<SessionStats> {
-    return this.storage.getSessionStats();
+  async getSessionStats(projectId: string): Promise<SessionStats> {
+    return this.storage.getSessionStats(projectId);
   }
 
-  async hasBaseline(sessionId: string): Promise<boolean> {
-    return this.storage.hasBaseline(sessionId);
+  async hasBaseline(projectId: string, sessionId: string): Promise<boolean> {
+    return this.storage.hasBaseline(projectId, sessionId);
   }
 
-  async setBaselineFlag(sessionId: string, testId: string): Promise<void> {
-    return this.storage.setBaselineFlag(sessionId, testId);
+  async setBaselineFlag(
+    projectId: string,
+    sessionId: string,
+    testId: string,
+  ): Promise<void> {
+    return this.storage.setBaselineFlag(projectId, sessionId, testId);
   }
 
-  async listBaselineScreenshots(sessionId: string): Promise<ScreenshotRef[]> {
-    return this.storage.listBaselineScreenshots(sessionId);
+  async listBaselineScreenshots(
+    projectId: string,
+    sessionId: string,
+  ): Promise<ScreenshotRef[]> {
+    return this.storage.listBaselineScreenshots(projectId, sessionId);
   }
 }

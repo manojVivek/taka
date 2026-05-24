@@ -1,9 +1,13 @@
 import express from 'express';
 import type { SessionData } from '@taka/types';
 
-const router = express.Router();
+const router = express.Router({ mergeParams: true });
 
-// POST /api/sessions - Create/upload session
+function projectId(req: express.Request): string {
+  return (req.params as { projectId: string }).projectId;
+}
+
+// POST / — Create/upload session
 router.post('/', async (req, res) => {
   try {
     const sessionData: SessionData = req.body;
@@ -15,7 +19,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    await req.sessionService.saveSession(sessionData);
+    await req.sessionService.saveSession(projectId(req), sessionData);
 
     res.status(201).json({
       success: true,
@@ -31,7 +35,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /api/sessions - List all sessions
+// GET / — List sessions
 router.get('/', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
@@ -53,7 +57,7 @@ router.get('/', async (req, res) => {
       });
     }
 
-    const result = await req.sessionService.getAllSessions({
+    const result = await req.sessionService.getAllSessions(projectId(req), {
       limit,
       offset,
       sortBy: sortBy as 'timestamp' | 'eventCount',
@@ -70,10 +74,10 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/sessions/stats - Get session statistics
+// GET /stats — Session statistics
 router.get('/stats', async (req, res) => {
   try {
-    const stats = await req.sessionService.getSessionStats();
+    const stats = await req.sessionService.getSessionStats(projectId(req));
     res.json(stats);
   } catch (error) {
     console.error('[Sessions API] Failed to get stats:', error);
@@ -84,11 +88,11 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// GET /api/sessions/search?q=query - Search sessions
+// GET /search?q=
 router.get('/search', async (req, res) => {
   try {
     const query = req.query.q as string;
-    
+
     if (!query) {
       return res.status(400).json({
         error: 'Missing query parameter',
@@ -96,7 +100,7 @@ router.get('/search', async (req, res) => {
       });
     }
 
-    const results = await req.sessionService.searchSessions(query);
+    const results = await req.sessionService.searchSessions(projectId(req), query);
     res.json({
       query,
       results,
@@ -111,16 +115,15 @@ router.get('/search', async (req, res) => {
   }
 });
 
-// GET /api/sessions/:id - Get specific session
+// GET /:id — Get specific session
 router.get('/:id', async (req, res) => {
   try {
-    const sessionId = req.params.id;
-    const session = await req.sessionService.getSession(sessionId);
+    const session = await req.sessionService.getSession(projectId(req), req.params.id);
 
     if (!session) {
       return res.status(404).json({
         error: 'Session not found',
-        message: `Session with ID ${sessionId} does not exist`,
+        message: `Session with ID ${req.params.id} does not exist`,
       });
     }
 
@@ -134,16 +137,15 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/sessions/:id - Delete specific session
+// DELETE /:id
 router.delete('/:id', async (req, res) => {
   try {
-    const sessionId = req.params.id;
-    const deleted = await req.sessionService.deleteSession(sessionId);
+    const deleted = await req.sessionService.deleteSession(projectId(req), req.params.id);
 
     if (!deleted) {
       return res.status(404).json({
         error: 'Session not found',
-        message: `Session with ID ${sessionId} does not exist`,
+        message: `Session with ID ${req.params.id} does not exist`,
       });
     }
 
@@ -160,16 +162,16 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// POST /api/sessions/:id/replay - Replay session as test
+// POST /:id/replay — Replay session as test
 router.post('/:id/replay', async (req, res) => {
   try {
-    const sessionId = req.params.id;
-    const session = await req.sessionService.getSession(sessionId);
+    const pid = projectId(req);
+    const session = await req.sessionService.getSession(pid, req.params.id);
 
     if (!session) {
       return res.status(404).json({
         error: 'Session not found',
-        message: `Session with ID ${sessionId} does not exist`,
+        message: `Session with ID ${req.params.id} does not exist`,
       });
     }
 
@@ -180,13 +182,13 @@ router.post('/:id/replay', async (req, res) => {
       viewport: req.body.viewport,
     };
 
-    const testId = await req.testService.runTest(session, testOptions);
+    const testId = await req.testService.runTest(pid, session, testOptions);
 
     res.status(202).json({
       success: true,
       testId,
       message: 'Test started successfully',
-      statusUrl: `/api/tests/${testId}`,
+      statusUrl: `/api/projects/${pid}/tests/${testId}`,
     });
   } catch (error) {
     console.error('[Sessions API] Failed to start test:', error);

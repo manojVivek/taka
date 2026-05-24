@@ -35,6 +35,7 @@ import { TakaRecorder } from '@taka/recorder';
 
 const recorder = TakaRecorder.init({
   apiEndpoint: 'http://localhost:3001/api',
+  projectId: 'notes-app',   // ← scopes every upload to this project
   uploadInterval: 5000,
   maxBatchSize: 50,
   enableNetworkCapture: true,
@@ -55,11 +56,28 @@ recorder.stop();
 
 The recorder skips initialization automatically when `window.__taka_replay` is set, so it does not record itself during a player replay.
 
+## Project binding
+
+Every upload is POSTed to **`${apiEndpoint}/projects/${projectId}/sessions`**. `projectId` is **required** — `TakaRecorder.init({...})` throws immediately if it's missing or empty. The project must already exist on the API server; create it via the dashboard or `POST /api/projects` first.
+
+There is no implicit default project: if you POST against an unknown `projectId`, the API returns `404 Project not found`.
+
 ## API
 
 ### `TakaRecorder.init(config)`
 
 Initializes and auto-starts the recorder unless `autoStart: false` is passed.
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `apiEndpoint` | `http://localhost:3000/api` | Base API URL (no trailing slash) |
+| `projectId` | — (required) | Project on the API server to attribute sessions to; init throws if omitted |
+| `uploadInterval` | `5000` | Periodic flush cadence (ms) |
+| `maxBatchSize` | `100` | Force-flush threshold; also the buffer overflow cap |
+| `enableNetworkCapture` | `true` | Capture fetch + XHR |
+| `enableStorageCapture` | `true` | Capture localStorage / sessionStorage writes |
+| `captureConsole` | `false` | (not yet implemented) |
+| `autoStart` | `true` | Whether `init()` auto-calls `start()` |
 
 ### Instance methods
 

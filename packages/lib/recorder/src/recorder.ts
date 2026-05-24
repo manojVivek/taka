@@ -16,12 +16,20 @@ export class TakaRecorder implements RecorderInstance {
   private uploadTimer?: NodeJS.Timeout;
 
   constructor(config: Partial<RecorderConfig> = {}) {
+    const merged = { ...DEFAULT_CONFIG, ...config } as RecorderConfig;
+    if (!merged.projectId || typeof merged.projectId !== 'string' || !merged.projectId.trim()) {
+      throw new Error(
+        '[Taka] TakaRecorder requires a non-empty `projectId` in the init config. ' +
+          'Create a project on the API (POST /api/projects) and pass its id.',
+      );
+    }
+
     this.state = {
       sessionId: generateId(),
       isRecording: false,
       isPaused: false,
       startTime: Date.now(),
-      config: { ...DEFAULT_CONFIG, ...config },
+      config: merged,
       buffer: {
         events: [],
         networkRequests: [],
@@ -29,10 +37,12 @@ export class TakaRecorder implements RecorderInstance {
       },
     };
 
+    const uploadUrl = `${merged.apiEndpoint}/projects/${merged.projectId}/sessions`;
+
     this.eventCapture = new EventCapture(this.handleEvent.bind(this));
-    this.networkCapture = new NetworkCapture(this.handleNetworkRequest.bind(this), this.state.config.apiEndpoint);
+    this.networkCapture = new NetworkCapture(this.handleNetworkRequest.bind(this), uploadUrl);
     this.storageCapture = new StorageCapture();
-    this.uploader = new SessionUploader(this.state.config.apiEndpoint);
+    this.uploader = new SessionUploader(uploadUrl);
 
     // Debounced upload function
     this.debouncedUpload = debounce(this.uploadBuffer.bind(this), 1000);

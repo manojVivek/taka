@@ -7,11 +7,17 @@ export class NetworkCapture {
   private originalFetch?: typeof fetch;
   private originalXHROpen?: typeof XMLHttpRequest.prototype.open;
   private originalXHRSend?: typeof XMLHttpRequest.prototype.send;
-  private apiEndpoint?: string;
+  private uploadUrl?: string;
 
-  constructor(onNetworkRequest: (request: NetworkRequest) => void, apiEndpoint?: string) {
+  constructor(onNetworkRequest: (request: NetworkRequest) => void, uploadUrl?: string) {
     this.onNetworkRequest = onNetworkRequest;
-    this.apiEndpoint = apiEndpoint;
+    this.uploadUrl = uploadUrl;
+  }
+
+  private isOwnUpload(url: string): boolean {
+    if (!this.uploadUrl) return false;
+    const stripped = url.split('?')[0];
+    return stripped === this.uploadUrl;
   }
 
   start(): void {
@@ -41,7 +47,7 @@ export class NetworkCapture {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 
       // Skip capturing the recorder's own upload requests
-      if (url.includes('/api/sessions') && url.includes(this.apiEndpoint || '')) {
+      if (this.isOwnUpload(url)) {
         return this.originalFetch!(input, init);
       }
 
@@ -113,7 +119,7 @@ export class NetworkCapture {
       const timestamp = (xhr as any)._takaTimestamp;
       const headers = (xhr as any)._takaHeaders || {};
 
-      if (self.isCapturing && requestId) {
+      if (self.isCapturing && requestId && !self.isOwnUpload(url)) {
         const request: NetworkRequest = {
           id: requestId,
           url,

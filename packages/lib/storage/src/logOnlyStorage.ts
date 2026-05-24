@@ -1,4 +1,4 @@
-import type { SessionData, TestResult } from '@taka/types';
+import type { Project, SessionData, TestResult } from '@taka/types';
 import type {
   Storage,
   SessionSummary,
@@ -7,6 +7,7 @@ import type {
   ListResult,
   SessionStats,
   DiffReport,
+  ProjectUpdate,
 } from './types';
 
 const TAG = '[Storage:LogOnly]';
@@ -24,9 +25,37 @@ export class LogOnlyStorage implements Storage {
     console.log(`${TAG} cleanup()`);
   }
 
-  async saveSession(session: SessionData): Promise<void> {
+  // === Projects ===
+
+  async createProject(project: Project): Promise<void> {
+    console.log(`${TAG} createProject(`, project, ')');
+  }
+
+  async getProject(id: string): Promise<Project | null> {
+    console.log(`${TAG} getProject(${id}) → null`);
+    return null;
+  }
+
+  async listProjects(): Promise<Project[]> {
+    console.log(`${TAG} listProjects() → empty`);
+    return [];
+  }
+
+  async updateProject(id: string, updates: ProjectUpdate): Promise<boolean> {
+    console.log(`${TAG} updateProject(${id},`, updates, ') → false');
+    return false;
+  }
+
+  async deleteProject(id: string): Promise<boolean> {
+    console.log(`${TAG} deleteProject(${id}) → false`);
+    return false;
+  }
+
+  // === Sessions ===
+
+  async saveSession(projectId: string, session: SessionData): Promise<void> {
     const snapshot = session.storageSnapshot;
-    console.log(`${TAG} saveSession(`, {
+    console.log(`${TAG} saveSession(${projectId},`, {
       id: session.id,
       url: session.url,
       eventCount: session.events.length,
@@ -63,28 +92,31 @@ export class LogOnlyStorage implements Storage {
     }
   }
 
-  async getSession(id: string): Promise<SessionData | null> {
-    console.log(`${TAG} getSession(${id}) → null`);
+  async getSession(projectId: string, id: string): Promise<SessionData | null> {
+    console.log(`${TAG} getSession(${projectId}, ${id}) → null`);
     return null;
   }
 
-  async listSessions(opts: ListOptions = {}): Promise<ListResult<SessionSummary>> {
-    console.log(`${TAG} listSessions(`, opts, ') → empty');
+  async listSessions(
+    projectId: string,
+    opts: ListOptions = {},
+  ): Promise<ListResult<SessionSummary>> {
+    console.log(`${TAG} listSessions(${projectId},`, opts, ') → empty');
     return { items: [], total: 0, limit: opts.limit ?? 50, offset: opts.offset ?? 0 };
   }
 
-  async deleteSession(id: string): Promise<boolean> {
-    console.log(`${TAG} deleteSession(${id}) → false`);
+  async deleteSession(projectId: string, id: string): Promise<boolean> {
+    console.log(`${TAG} deleteSession(${projectId}, ${id}) → false`);
     return false;
   }
 
-  async searchSessions(query: string): Promise<SessionSummary[]> {
-    console.log(`${TAG} searchSessions(${query}) → empty`);
+  async searchSessions(projectId: string, query: string): Promise<SessionSummary[]> {
+    console.log(`${TAG} searchSessions(${projectId}, ${query}) → empty`);
     return [];
   }
 
-  async getSessionStats(): Promise<SessionStats> {
-    console.log(`${TAG} getSessionStats() → zeros`);
+  async getSessionStats(projectId: string): Promise<SessionStats> {
+    console.log(`${TAG} getSessionStats(${projectId}) → zeros`);
     return {
       totalSessions: 0,
       totalEvents: 0,
@@ -94,31 +126,57 @@ export class LogOnlyStorage implements Storage {
     };
   }
 
-  async hasBaseline(_sessionId: string): Promise<boolean> {
-    console.log(`${TAG} hasBaseline(${_sessionId}) → false`);
+  async hasBaseline(projectId: string, sessionId: string): Promise<boolean> {
+    console.log(`${TAG} hasBaseline(${projectId}, ${sessionId}) → false`);
     return false;
   }
 
-  async setBaselineFlag(sessionId: string, testId: string): Promise<void> {
-    console.log(`${TAG} setBaselineFlag(${sessionId}, ${testId})`);
+  async setBaselineFlag(
+    projectId: string,
+    sessionId: string,
+    testId: string,
+  ): Promise<void> {
+    console.log(`${TAG} setBaselineFlag(${projectId}, ${sessionId}, ${testId})`);
   }
 
-  async putBaselineScreenshot(sessionId: string, filename: string, bytes: Buffer): Promise<void> {
-    console.log(`${TAG} putBaselineScreenshot(${sessionId}, ${filename},`, logBytes(bytes), ')');
+  async putBaselineScreenshot(
+    projectId: string,
+    sessionId: string,
+    filename: string,
+    bytes: Buffer,
+  ): Promise<void> {
+    console.log(
+      `${TAG} putBaselineScreenshot(${projectId}, ${sessionId}, ${filename},`,
+      logBytes(bytes),
+      ')',
+    );
   }
 
-  async listBaselineScreenshots(sessionId: string): Promise<ScreenshotRef[]> {
-    console.log(`${TAG} listBaselineScreenshots(${sessionId}) → empty`);
+  async listBaselineScreenshots(
+    projectId: string,
+    sessionId: string,
+  ): Promise<ScreenshotRef[]> {
+    console.log(`${TAG} listBaselineScreenshots(${projectId}, ${sessionId}) → empty`);
     return [];
   }
 
-  async getBaselineScreenshot(sessionId: string, filename: string): Promise<Buffer | null> {
-    console.log(`${TAG} getBaselineScreenshot(${sessionId}, ${filename}) → null`);
+  async getBaselineScreenshot(
+    projectId: string,
+    sessionId: string,
+    filename: string,
+  ): Promise<Buffer | null> {
+    console.log(
+      `${TAG} getBaselineScreenshot(${projectId}, ${sessionId}, ${filename}) → null`,
+    );
     return null;
   }
 
-  async saveTestResult(testId: string, result: TestResult): Promise<void> {
-    console.log(`${TAG} saveTestResult(${testId},`, {
+  async saveTestResult(
+    projectId: string,
+    testId: string,
+    result: TestResult,
+  ): Promise<void> {
+    console.log(`${TAG} saveTestResult(${projectId}, ${testId},`, {
       sessionId: result.sessionId,
       status: result.status,
       isBaseline: result.isBaseline,
@@ -145,40 +203,72 @@ export class LogOnlyStorage implements Storage {
     }
   }
 
-  async getTestResult(testId: string): Promise<TestResult | null> {
-    console.log(`${TAG} getTestResult(${testId}) → null`);
+  async getTestResult(projectId: string, testId: string): Promise<TestResult | null> {
+    console.log(`${TAG} getTestResult(${projectId}, ${testId}) → null`);
     return null;
   }
 
-  async putTestScreenshot(testId: string, filename: string, bytes: Buffer): Promise<void> {
-    console.log(`${TAG} putTestScreenshot(${testId}, ${filename},`, logBytes(bytes), ')');
+  async putTestScreenshot(
+    projectId: string,
+    testId: string,
+    filename: string,
+    bytes: Buffer,
+  ): Promise<void> {
+    console.log(
+      `${TAG} putTestScreenshot(${projectId}, ${testId}, ${filename},`,
+      logBytes(bytes),
+      ')',
+    );
   }
 
-  async listTestScreenshots(testId: string): Promise<ScreenshotRef[]> {
-    console.log(`${TAG} listTestScreenshots(${testId}) → empty`);
+  async listTestScreenshots(projectId: string, testId: string): Promise<ScreenshotRef[]> {
+    console.log(`${TAG} listTestScreenshots(${projectId}, ${testId}) → empty`);
     return [];
   }
 
-  async getTestScreenshot(testId: string, filename: string): Promise<Buffer | null> {
-    console.log(`${TAG} getTestScreenshot(${testId}, ${filename}) → null`);
+  async getTestScreenshot(
+    projectId: string,
+    testId: string,
+    filename: string,
+  ): Promise<Buffer | null> {
+    console.log(
+      `${TAG} getTestScreenshot(${projectId}, ${testId}, ${filename}) → null`,
+    );
     return null;
   }
 
-  async putTestDiff(testId: string, filename: string, bytes: Buffer): Promise<void> {
-    console.log(`${TAG} putTestDiff(${testId}, ${filename},`, logBytes(bytes), ')');
+  async putTestDiff(
+    projectId: string,
+    testId: string,
+    filename: string,
+    bytes: Buffer,
+  ): Promise<void> {
+    console.log(
+      `${TAG} putTestDiff(${projectId}, ${testId}, ${filename},`,
+      logBytes(bytes),
+      ')',
+    );
   }
 
-  async listTestDiffs(testId: string): Promise<ScreenshotRef[]> {
-    console.log(`${TAG} listTestDiffs(${testId}) → empty`);
+  async listTestDiffs(projectId: string, testId: string): Promise<ScreenshotRef[]> {
+    console.log(`${TAG} listTestDiffs(${projectId}, ${testId}) → empty`);
     return [];
   }
 
-  async getTestDiff(testId: string, filename: string): Promise<Buffer | null> {
-    console.log(`${TAG} getTestDiff(${testId}, ${filename}) → null`);
+  async getTestDiff(
+    projectId: string,
+    testId: string,
+    filename: string,
+  ): Promise<Buffer | null> {
+    console.log(`${TAG} getTestDiff(${projectId}, ${testId}, ${filename}) → null`);
     return null;
   }
 
-  async putTestDiffReport(testId: string, report: DiffReport): Promise<void> {
-    console.log(`${TAG} putTestDiffReport(${testId},`, report.summary, ')');
+  async putTestDiffReport(
+    projectId: string,
+    testId: string,
+    report: DiffReport,
+  ): Promise<void> {
+    console.log(`${TAG} putTestDiffReport(${projectId}, ${testId},`, report.summary, ')');
   }
 }

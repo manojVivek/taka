@@ -103,6 +103,7 @@ Most of the platform is functional end-to-end. You can record a session, replay 
   - Storage snapshot (localStorage, sessionStorage, cookies) for auth restoration
   - Sensitive field filtering (passwords, emails, credit cards)
   - Batched uploads with debounced flush and `beforeunload` handling
+  - Per-project upload routing — `projectId` is a required field in the init config; the recorder throws at init if it's missing or empty
   - `__taka_replay` flag to avoid recording during replays
 - **Replay engine** (`@taka/player`)
   - Puppeteer-based deterministic replay
@@ -116,16 +117,19 @@ Most of the platform is functional end-to-end. You can record a session, replay 
   - Batch screenshot set comparison
   - JSON reports with critical/minor categorization
 - **API server** (`@taka/api`)
-  - Sessions CRUD (`/api/sessions`)
-  - Search and stats endpoints
-  - Test execution (`/api/tests/run`, `/api/tests/:id`)
+  - Projects as the top-level umbrella over sessions and tests
+  - Project CRUD (`/api/projects`) with cascade delete
+  - Project-scoped sessions (`/api/projects/:projectId/sessions`) — CRUD, search, stats
+  - Project-scoped test execution (`/api/projects/:projectId/tests/run`, `/api/projects/:projectId/tests/:id`)
+  - Every route is project-scoped (`/api/projects/:projectId/...`); requests with an unknown project id return 404
   - In-process job queue with `p-queue`
   - Blob endpoints for screenshots and diffs (streamed through `@taka/storage`, not filesystem-bound)
   - Health/readiness probes
 - **Pluggable persistence** (`@taka/storage`)
-  - One `Storage` interface covering sessions, baselines, test results, screenshots, diffs, reports
-  - `FileStorage` (default) — local filesystem under `./data/`
+  - One `Storage` interface covering projects, sessions, baselines, test results, screenshots, diffs, reports
+  - `FileStorage` (default) — local filesystem under `./data/projects/<projectId>/...`
   - `LogOnlyStorage` — every call logged to stdout, nothing persisted (for debug)
+  - No implicit "default" project — every project is explicitly created via `POST /api/projects`
   - Selected at boot via `TAKA_STORAGE=file|logOnly`
 - **Web dashboard** (`@taka/web`)
   - Dashboard with stats and recent sessions
@@ -160,16 +164,19 @@ Most of the platform is functional end-to-end. You can record a session, replay 
 ## Storage Layout
 
 ```
-data/
-├── user-sessions/
-│   └── <sessionId>/
-│       ├── session.json     # Recorded SessionData
-│       └── screenshots/     # Baseline screenshots (when promoted)
-└── test-sessions/
-    └── <testId>/
-        ├── result.json      # TestResult metadata
-        ├── screenshots/     # Replay screenshots
-        └── diffs/           # Pixel-diff images
+data/projects/
+├── projects.json                 # Map<projectId, Project> index
+└── <projectId>/
+    ├── user-sessions/
+    │   ├── index.json
+    │   └── <sessionId>/
+    │       ├── session.json      # Recorded SessionData
+    │       └── screenshots/      # Baseline screenshots (when promoted)
+    └── test-sessions/
+        └── <testId>/
+            ├── result.json       # TestResult metadata
+            ├── screenshots/      # Replay screenshots
+            └── diffs/            # Pixel-diff images + report.json
 ```
 
 ## Design Principles

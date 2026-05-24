@@ -23,6 +23,7 @@ type TestStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 interface TestExecution {
   id: string;
+  projectId: string;
   sessionId: string;
   status: TestStatus;
   createdAt: number;
@@ -59,12 +60,17 @@ export class TestService {
     console.log('[TestService] Initialized');
   }
 
-  async runTest(sessionData: SessionData, options: TestOptions = {}): Promise<string> {
-    console.log('[TestService] Starting test for session:', sessionData.id);
+  async runTest(
+    projectId: string,
+    sessionData: SessionData,
+    options: TestOptions = {},
+  ): Promise<string> {
+    console.log('[TestService] Starting test:', { projectId, sessionId: sessionData.id });
 
     const testId = generateId();
     const testExecution: TestExecution = {
       id: testId,
+      projectId,
       sessionId: sessionData.id,
       status: 'pending',
       createdAt: Date.now(),
@@ -74,25 +80,30 @@ export class TestService {
     this.activeTests.set(testId, testExecution);
 
     this.testQueue.add(async () => {
-      await this.executeTest(testId, sessionData, options);
+      await this.executeTest(testId, projectId, sessionData, options);
     });
 
     return testId;
   }
 
-  async getTestStatus(testId: string): Promise<TestExecution | null> {
-    return this.activeTests.get(testId) || null;
+  async getTestStatus(projectId: string, testId: string): Promise<TestExecution | null> {
+    const exec = this.activeTests.get(testId);
+    if (!exec || exec.projectId !== projectId) return null;
+    return exec;
   }
 
-  async getTestResult(testId: string): Promise<TestResult | null> {
-    return this.storage.getTestResult(testId);
+  async getTestResult(projectId: string, testId: string): Promise<TestResult | null> {
+    return this.storage.getTestResult(projectId, testId);
   }
 
-  async getAllTests(opts: {
-    limit?: number;
-    offset?: number;
-    status?: TestStatus;
-  } = {}): Promise<{
+  async getAllTests(
+    projectId: string,
+    opts: {
+      limit?: number;
+      offset?: number;
+      status?: TestStatus;
+    } = {},
+  ): Promise<{
     tests: TestExecution[];
     total: number;
     limit: number;
@@ -100,7 +111,7 @@ export class TestService {
   }> {
     const { limit = 50, offset = 0, status } = opts;
 
-    let tests = Array.from(this.activeTests.values());
+    let tests = Array.from(this.activeTests.values()).filter(t => t.projectId === projectId);
     if (status) tests = tests.filter(t => t.status === status);
     tests.sort((a, b) => b.createdAt - a.createdAt);
 
@@ -110,21 +121,24 @@ export class TestService {
   }
 
   async compareScreenshots(
+    projectId: string,
     baseSessionId: string,
     headSessionId: string,
     options: ComparisonOptions = {},
   ): Promise<string> {
     const comparisonId = generateId();
     this.testQueue.add(async () => {
-      await this.executeComparison(comparisonId, baseSessionId, headSessionId, options);
+      await this.executeComparison(projectId, comparisonId, baseSessionId, headSessionId, options);
     });
     return comparisonId;
   }
 
-  async getQueueStatus(): Promise<{ pending: number; running: number; completed: number }> {
-    const tests = Array.from(this.activeTests.values());
+  async getQueueStatus(
+    projectId: string,
+  ): Promise<{ pending: number; running: number; completed: number }> {
+    const tests = Array.from(this.activeTests.values()).filter(t => t.projectId === projectId);
     return {
-      pending: this.testQueue.pending,
+      pending: tests.filter(t => t.status === 'pending').length,
       running: tests.filter(t => t.status === 'running').length,
       completed: tests.filter(t => t.status === 'completed' || t.status === 'failed').length,
     };
@@ -138,6 +152,7 @@ export class TestService {
 
   private async executeTest(
     testId: string,
+    projectId: string,
     sessionData: SessionData,
     options: TestOptions,
   ): Promise<void> {
@@ -148,37 +163,39 @@ export class TestService {
       testExecution.status = 'running';
       testExecution.startedAt = Date.now();
 
-      // Run the replay, persisting screenshots through storage as they arrive
       const collected: CapturedScreenshot[] = [];
       const playbackResult = await this.sessionPlayer.replay(sessionData, {
         onScreenshot: async (meta, bytes) => {
-          await this.storage.putTestScreenshot(testId, meta.filename, bytes);
+          await this.storage.putTestScreenshot(projectId, testId, meta.filename, bytes);
           collected.push({ meta, bytes });
         },
       });
 
-      const hasBaseline = await this.sessionService.hasBaseline(sessionData.id);
+      const hasBaseline = await this.sessionService.hasBaseline(projectId, sessionData.id);
 
       let diffs: VisualDiff[] = [];
       let isBaseline = false;
 
       if (!hasBaseline) {
-        // First replay — promote the test screenshots to baseline
         for (const s of collected) {
-          await this.storage.putBaselineScreenshot(sessionData.id, s.meta.filename, s.bytes);
+          await this.storage.putBaselineScreenshot(
+            projectId,
+            sessionData.id,
+            s.meta.filename,
+            s.bytes,
+          );
         }
-        await this.sessionService.setBaselineFlag(sessionData.id, testId);
+        await this.sessionService.setBaselineFlag(projectId, sessionData.id, testId);
         isBaseline = true;
-        console.log('[TestService] Baseline created for session:', sessionData.id);
+        console.log('[TestService] Baseline created:', { projectId, sessionId: sessionData.id });
       } else {
-        // Pair baseline + test screenshots by event index and run pixel diffs
-        const pairs = await this.buildPairs(sessionData.id, collected);
+        const pairs = await this.buildPairs(projectId, sessionData.id, collected);
         if (pairs.length > 0) {
           const { comparisons } = await this.imageComparison.compareScreenshotSets(pairs);
 
           for (const c of comparisons) {
             if (c.diffImage && c.diffFilename) {
-              await this.storage.putTestDiff(testId, c.diffFilename, c.diffImage);
+              await this.storage.putTestDiff(projectId, testId, c.diffFilename, c.diffImage);
             }
           }
 
@@ -204,7 +221,7 @@ export class TestService {
               diffFilename: c.diffFilename,
             })),
           };
-          await this.storage.putTestDiffReport(testId, report);
+          await this.storage.putTestDiffReport(projectId, testId, report);
 
           console.log('[TestService] Visual comparison completed:', report.summary);
         }
@@ -219,6 +236,7 @@ export class TestService {
 
       const testResult: TestResult = {
         id: testId,
+        projectId,
         sessionId: sessionData.id,
         baseCommit: options.baseCommit,
         headCommit: options.headCommit,
@@ -235,7 +253,7 @@ export class TestService {
         isBaseline,
       };
 
-      await this.storage.saveTestResult(testId, testResult);
+      await this.storage.saveTestResult(projectId, testId, testResult);
 
       testExecution.status = status === 'passed' ? 'completed' : 'failed';
       testExecution.completedAt = Date.now();
@@ -252,17 +270,22 @@ export class TestService {
   }
 
   private async buildPairs(
+    projectId: string,
     sessionId: string,
     collected: CapturedScreenshot[],
   ): Promise<ScreenshotPair[]> {
-    const baselineRefs = await this.storage.listBaselineScreenshots(sessionId);
+    const baselineRefs = await this.storage.listBaselineScreenshots(projectId, sessionId);
     const pairs: ScreenshotPair[] = [];
 
     for (const baseRef of baselineRefs) {
       const headEntry = collected.find(c => c.meta.eventIndex === baseRef.eventIndex);
       if (!headEntry) continue;
 
-      const baseBytes = await this.storage.getBaselineScreenshot(sessionId, baseRef.filename);
+      const baseBytes = await this.storage.getBaselineScreenshot(
+        projectId,
+        sessionId,
+        baseRef.filename,
+      );
       if (!baseBytes) continue;
 
       pairs.push({
@@ -279,14 +302,15 @@ export class TestService {
   }
 
   private async executeComparison(
+    projectId: string,
     comparisonId: string,
     baseSessionId: string,
     headSessionId: string,
     options: ComparisonOptions,
   ): Promise<void> {
     try {
-      const baseRefs = await this.storage.listBaselineScreenshots(baseSessionId);
-      const headRefs = await this.storage.listBaselineScreenshots(headSessionId);
+      const baseRefs = await this.storage.listBaselineScreenshots(projectId, baseSessionId);
+      const headRefs = await this.storage.listBaselineScreenshots(projectId, headSessionId);
 
       const pairs: ScreenshotPair[] = [];
       for (const baseRef of baseRefs) {
@@ -294,8 +318,8 @@ export class TestService {
         if (!headRef) continue;
 
         const [baseBytes, headBytes] = await Promise.all([
-          this.storage.getBaselineScreenshot(baseSessionId, baseRef.filename),
-          this.storage.getBaselineScreenshot(headSessionId, headRef.filename),
+          this.storage.getBaselineScreenshot(projectId, baseSessionId, baseRef.filename),
+          this.storage.getBaselineScreenshot(projectId, headSessionId, headRef.filename),
         ]);
         if (!baseBytes || !headBytes) continue;
 
@@ -321,7 +345,12 @@ export class TestService {
 
       for (const c of comparisons) {
         if (c.diffImage && c.diffFilename) {
-          await this.storage.putTestDiff(comparisonId, c.diffFilename, c.diffImage);
+          await this.storage.putTestDiff(
+            projectId,
+            comparisonId,
+            c.diffFilename,
+            c.diffImage,
+          );
         }
       }
 
@@ -344,7 +373,7 @@ export class TestService {
           diffFilename: c.diffFilename,
         })),
       };
-      await this.storage.putTestDiffReport(comparisonId, report);
+      await this.storage.putTestDiffReport(projectId, comparisonId, report);
 
       console.log('[TestService] Comparison completed:', comparisonId, summary);
     } catch (error) {

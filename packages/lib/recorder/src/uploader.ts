@@ -1,15 +1,15 @@
 import type { SessionData } from '@taka/types';
 
 export class SessionUploader {
-  private apiEndpoint: string;
+  constructor(private uploadUrl: string) {}
 
-  constructor(apiEndpoint: string) {
-    this.apiEndpoint = apiEndpoint;
+  getUploadUrl(): string {
+    return this.uploadUrl;
   }
 
   async upload(sessionData: SessionData): Promise<void> {
     try {
-      const response = await fetch(`${this.apiEndpoint}/sessions`, {
+      const response = await fetch(this.uploadUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -32,11 +32,8 @@ export class SessionUploader {
   uploadSync(sessionData: SessionData): void {
     // Use sendBeacon for synchronous upload during page unload
     if ('sendBeacon' in navigator) {
-      const success = navigator.sendBeacon(
-        `${this.apiEndpoint}/sessions`,
-        JSON.stringify(sessionData)
-      );
-      
+      const success = navigator.sendBeacon(this.uploadUrl, JSON.stringify(sessionData));
+
       if (!success) {
         console.warn('[Taka] Failed to send beacon');
       }
@@ -44,10 +41,10 @@ export class SessionUploader {
       // Fallback to synchronous XHR (not recommended)
       try {
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', `${this.apiEndpoint}/sessions`, false); // synchronous
+        xhr.open('POST', this.uploadUrl, false); // synchronous
         xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.send(JSON.stringify(sessionData));
-        
+
         if (xhr.status >= 400) {
           console.warn('[Taka] Synchronous upload failed:', xhr.status, xhr.statusText);
         }

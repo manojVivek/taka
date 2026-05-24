@@ -1,3 +1,10 @@
+export interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: number;
+}
+
 export interface SessionEvent {
   id: string;
   type: 'click' | 'input' | 'scroll' | 'navigation' | 'mutation' | 'mousemove' | 'focus' | 'blur' | 'submit' | 'resize';
@@ -8,6 +15,7 @@ export interface SessionEvent {
 
 export interface SessionData {
   id: string;
+  projectId?: string;
   url: string;
   timestamp: number;
   events: SessionEvent[];
@@ -55,6 +63,7 @@ export interface Screenshot {
 
 export interface TestResult {
   id: string;
+  projectId?: string;
   sessionId: string;
   baseCommit?: string;
   headCommit?: string;
@@ -86,6 +95,7 @@ export interface StorageSnapshot {
 
 export interface RecorderConfig {
   apiEndpoint: string;
+  projectId: string;
   uploadInterval: number;
   maxBatchSize: number;
   enableNetworkCapture: boolean;
