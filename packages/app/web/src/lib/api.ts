@@ -1,124 +1,186 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+import type { Project, SessionData, TestResult } from '@taka/types';
 
-export class ApiClient {
-  private baseUrl: string;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
 
-  constructor(baseUrl: string = API_BASE) {
-    this.baseUrl = baseUrl;
-  }
+export interface ProjectListResponse {
+  projects: Project[];
+  total: number;
+}
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
-    
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      ...options,
-    });
+export interface SessionSummary {
+  id: string;
+  projectId: string;
+  url: string;
+  timestamp: number;
+  eventCount: number;
+  networkRequestCount: number;
+  userAgent: string;
+  title?: string;
+  userId?: string;
+  size: number;
+  hasBaseline?: boolean;
+}
 
-    if (!response.ok) {
-      let errorMessage = `API Error: ${response.status}`;
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.message || errorData.error || errorMessage;
-      } catch {
-        // Use default error message if JSON parsing fails
-      }
-      throw new Error(errorMessage);
+export interface SessionsListResponse {
+  sessions: SessionSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface SessionStats {
+  totalSessions: number;
+  totalEvents: number;
+  totalNetworkRequests: number;
+  totalSize: number;
+  averageEventsPerSession: number;
+  oldestSession?: string;
+  newestSession?: string;
+}
+
+export interface QueueStatus {
+  pending: number;
+  running: number;
+  completed: number;
+}
+
+export interface TestExecution {
+  id: string;
+  projectId: string;
+  sessionId: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  createdAt: number;
+  startedAt?: number;
+  completedAt?: number;
+  result?: TestResult;
+  errors?: string[];
+}
+
+export interface TestsListResponse {
+  tests: TestExecution[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const url = `${API_BASE}${path}`;
+  const response = await fetch(url, {
+    headers: { 'Content-Type': 'application/json', ...options.headers },
+    ...options,
+  });
+  if (!response.ok) {
+    let message = `API Error: ${response.status}`;
+    try {
+      const data = await response.json();
+      message = data.message || data.error || message;
+    } catch {
+      // not JSON
     }
-
-    return response.json();
+    throw new Error(message);
   }
+  return response.json();
+}
 
-  // Health endpoints
-  async getHealth() {
-    return this.request('/health');
+function qs(params: Record<string, string | number | undefined>): string {
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '') sp.set(k, String(v));
   }
+  const s = sp.toString();
+  return s ? `?${s}` : '';
+}
 
-  async getReadiness() {
-    return this.request('/health/ready');
-  }
+export const api = {
+  // ---- Health ----
+  getHealth(): Promise<boolean> {
+    return request<{ status: string }>('/health').then(() => true).catch(() => false);
+  },
 
-  // Session endpoints
-  async getSessions(params: {
-    limit?: number;
-    offset?: number;
-    sortBy?: 'timestamp' | 'eventCount';
-    sortOrder?: 'asc' | 'desc';
-  } = {}): Promise<{ sessions: any[]; total: number }> {
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined) {
-        searchParams.set(key, String(value));
-      }
+  // ---- Projects ----
+  listProjects() {
+    return request<ProjectListResponse>('/projects');
+  },
+  getProject(id: string) {
+    return request<Project>(`/projects/${encodeURIComponent(id)}`);
+  },
+  createProject(body: { name: string; description?: string; id?: string }) {
+    return request<Project>('/projects', { method: 'POST', body: JSON.stringify(body) });
+  },
+  updateProject(id: string, body: { name?: string; description?: string }) {
+    return request<Project>(`/projects/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
     });
+  },
+  deleteProject(id: string) {
+    return request<{ success: boolean }>(`/projects/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
 
-    return this.request(`/sessions?${searchParams}`);
-  }
-
-  async getSession(sessionId: string) {
-    return this.request(`/sessions/${sessionId}`);
-  }
-
-  async getSessionStats(): Promise<any> {
-    return this.request('/sessions/stats');
-  }
-
-  async searchSessions(query: string) {
-    return this.request(`/sessions/search?q=${encodeURIComponent(query)}`);
-  }
-
-  async deleteSession(sessionId: string) {
-    return this.request(`/sessions/${sessionId}`, { method: 'DELETE' });
-  }
-
-  async replaySession(sessionId: string, options: any = {}) {
-    return this.request(`/sessions/${sessionId}/replay`, {
+  // ---- Sessions ----
+  getSessions(
+    projectId: string,
+    params: { limit?: number; offset?: number; sortBy?: 'timestamp' | 'eventCount'; sortOrder?: 'asc' | 'desc' } = {},
+  ) {
+    return request<SessionsListResponse>(`/projects/${projectId}/sessions${qs(params)}`);
+  },
+  getSession(projectId: string, id: string) {
+    return request<SessionData>(`/projects/${projectId}/sessions/${id}`);
+  },
+  getSessionStats(projectId: string) {
+    return request<SessionStats>(`/projects/${projectId}/sessions/stats`);
+  },
+  searchSessions(projectId: string, q: string) {
+    return request<{ query: string; results: SessionSummary[]; total: number }>(
+      `/projects/${projectId}/sessions/search${qs({ q })}`,
+    );
+  },
+  deleteSession(projectId: string, id: string) {
+    return request<{ success: boolean }>(`/projects/${projectId}/sessions/${id}`, { method: 'DELETE' });
+  },
+  replaySession(projectId: string, id: string, options: Record<string, unknown> = {}) {
+    return request<{ testId: string }>(`/projects/${projectId}/sessions/${id}/replay`, {
       method: 'POST',
       body: JSON.stringify(options),
     });
-  }
+  },
 
-  // Test endpoints
-  async getTests(params: {
-    limit?: number;
-    offset?: number;
-    status?: string;
-  } = {}) {
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined) {
-        searchParams.set(key, String(value));
-      }
-    });
-    
-    return this.request(`/tests?${searchParams}`);
-  }
-
-  async getTest(testId: string) {
-    return this.request(`/tests/${testId}`);
-  }
-
-  async getTestResult(testId: string) {
-    return this.request(`/tests/${testId}/result`);
-  }
-
-  async getQueueStatus(): Promise<any> {
-    return this.request('/tests/queue');
-  }
-
-  async compareScreenshots(baseSessionId: string, headSessionId: string, options: any = {}) {
-    return this.request('/tests/compare', {
+  // ---- Tests ----
+  getTests(projectId: string, params: { limit?: number; offset?: number; status?: string } = {}) {
+    return request<TestsListResponse>(`/projects/${projectId}/tests${qs(params)}`);
+  },
+  getTest(projectId: string, id: string) {
+    return request<TestExecution>(`/projects/${projectId}/tests/${id}`);
+  },
+  getTestResult(projectId: string, id: string) {
+    return request<TestResult>(`/projects/${projectId}/tests/${id}/result`);
+  },
+  getQueueStatus(projectId: string) {
+    return request<QueueStatus>(`/projects/${projectId}/tests/queue`);
+  },
+  runTest(projectId: string, sessionData: SessionData, options: Record<string, unknown> = {}) {
+    return request<{ testId: string }>(`/projects/${projectId}/tests/run`, {
       method: 'POST',
-      body: JSON.stringify({
-        baseSessionId,
-        headSessionId,
-        ...options,
-      }),
+      body: JSON.stringify({ sessionData, options }),
     });
-  }
+  },
+  compareScreenshots(projectId: string, baseSessionId: string, headSessionId: string, options: Record<string, unknown> = {}) {
+    return request<{ comparisonId: string }>(`/projects/${projectId}/tests/compare`, {
+      method: 'POST',
+      body: JSON.stringify({ baseSessionId, headSessionId, ...options }),
+    });
+  },
+};
+
+// URL builders for <img> tags
+export function baselineScreenshotUrl(projectId: string, sessionId: string, filename: string): string {
+  return `${API_BASE}/projects/${projectId}/user-sessions/${sessionId}/screenshots/${filename}`;
 }
 
-export const api = new ApiClient();
+export function testScreenshotUrl(projectId: string, testId: string, filename: string): string {
+  return `${API_BASE}/projects/${projectId}/test-sessions/${testId}/screenshots/${filename}`;
+}
+
+export function testDiffUrl(projectId: string, testId: string, filename: string): string {
+  return `${API_BASE}/projects/${projectId}/test-sessions/${testId}/diffs/${filename}`;
+}

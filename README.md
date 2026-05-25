@@ -132,13 +132,18 @@ Most of the platform is functional end-to-end. You can record a session, replay 
   - No implicit "default" project — every project is explicitly created via `POST /api/projects`
   - Selected at boot via `TAKA_STORAGE=file|logOnly`
 - **Web dashboard** (`@taka/web`)
-  - Dashboard with stats and recent sessions
-  - Sessions list with pagination, search, sort
-  - Session detail page
-  - Tests list with status filtering
-  - Test detail page with baseline/head/diff viewing
-  - Live test queue polling
-  - Getting-started page with recorder snippets
+  - Terminal/devtool aesthetic — sharp corners, dark-mode-first, lime accent
+  - Type system: JetBrains Mono (ui/code) + Space Grotesk (display) + IBM Plex Sans (prose) via `next/font/google`
+  - Theme toggle (dark ↔ light) with FOUC-prevention bootstrap script and localStorage persistence
+  - Projects landing (`/`) with grid of project cards, search, "new project" modal
+  - Per-project dashboard (`/projects/[id]`) — stat tiles, recent sessions, live queue widget
+  - Sessions list with search/sort/pagination
+  - Session detail with metadata strip, event-density sparkline, filtered event timeline, network panel
+  - Tests list with status filter, mini frame-strip per row, 2s polling
+  - Test detail (the hero) — three-up Baseline/Head/Diff viewer with frame list, jump-to-failure, frame-strip filmstrip
+  - Getting-started — install snippet pre-filled with the project's id, live "waiting for first session" panel that auto-redirects on arrival
+  - Settings — rename, accent color (read-only, derived from id), delete with typed-confirmation
+  - Project switcher in the sidebar (dropdown with all projects + back-to-list)
 - **Test-app** (`@taka/test-app`)
   - Notes CRUD with recorder pre-wired
   - Puppeteer automation script for generating realistic sessions

@@ -1,29 +1,52 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import { Sidebar } from '@/components/Sidebar';
+import { JetBrains_Mono, Space_Grotesk, IBM_Plex_Sans } from 'next/font/google';
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-jetbrains-mono',
+  display: 'swap',
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-space-grotesk',
+  display: 'swap',
+});
+
+const ibmPlexSans = IBM_Plex_Sans({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600'],
+  variable: '--font-ibm-plex-sans',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
-  title: 'Taka - Visual Testing Dashboard',
-  description: 'Automated visual frontend testing platform',
+  title: 'Taka — visual regression testing',
+  description: 'Records user sessions, replays them in headless Chrome, pixel-diffs against a baseline.',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+// Inline script that runs before paint to apply the persisted theme.
+// Prevents a light-mode flash on dark-default and vice versa.
+const themeBootstrap = `
+(function(){
+  try {
+    var t = localStorage.getItem('taka-theme');
+    if (t === 'light') document.documentElement.classList.add('theme-light');
+  } catch (e) {}
+})();
+`;
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const fontClasses = `${jetbrainsMono.variable} ${spaceGrotesk.variable} ${ibmPlexSans.variable}`;
   return (
-    <html lang="en">
-      <body className="h-screen bg-gray-50">
-        <div className="flex h-full">
-          <Sidebar />
-          <main className="flex-1 overflow-y-auto">
-            <div className="max-w-7xl mx-auto px-6 py-8">
-              {children}
-            </div>
-          </main>
-        </div>
-      </body>
+    <html lang="en" className={fontClasses}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+      </head>
+      <body>{children}</body>
     </html>
   );
 }
