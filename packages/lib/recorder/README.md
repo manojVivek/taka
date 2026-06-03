@@ -100,11 +100,34 @@ Initializes and auto-starts the recorder unless `autoStart: false` is passed.
 | `networkCapture.ts` | Patches `fetch` and `XMLHttpRequest` to record requests/responses |
 | `storageCapture.ts` | Snapshots localStorage/sessionStorage/cookies and intercepts mutations |
 | `uploader.ts` | Batched upload to the API endpoint |
-| `browser.ts` | Browser-global entry point for `<script>` tag use |
+| `defaults.ts` | `DEFAULT_CONFIG` — recorder-owned defaults (no `@taka/constants` dependency, so the browser bundle stays free of server-only code) |
+| `browser.ts` | ESM browser entry (the `browser` export condition) |
+| `iife.ts` | Side-effect entry rolled up into the standalone IIFE bundle |
 
 ## Build
 
 ```bash
-pnpm build       # Compile TypeScript to dist/
-pnpm type-check  # Type-check without emitting
+pnpm build          # tsc → dist/, then rollup → dist/browser.global.js (IIFE)
+pnpm build:browser  # just the IIFE bundle (requires tsc output to exist)
+pnpm type-check     # Type-check without emitting
+```
+
+### Standalone `<script>` bundle
+
+`pnpm build:browser` (run automatically as part of `pnpm build`) uses rollup +
+`@rollup/plugin-node-resolve` + `@rollup/plugin-commonjs` to bundle the recorder
+and its deps (`@taka/utils`, `uuid`) into a single self-contained IIFE at
+`dist/browser.global.js` that exposes `window.TakaRecorder`. This is what the
+test fixture serves at `/recorder.js`:
+
+```html
+<script src="/recorder.js"></script>
+<script>
+  if (!window.__taka_replay) {
+    window.__takaRecorder = window.TakaRecorder.init({
+      apiEndpoint: 'http://localhost:3001/api',
+      projectId: 'prj_...',
+    });
+  }
+</script>
 ```

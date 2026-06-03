@@ -1,12 +1,3 @@
-export const DEFAULT_CONFIG = {
-  apiEndpoint: 'http://localhost:3000/api',
-  uploadInterval: 5000,
-  maxBatchSize: 100,
-  enableNetworkCapture: true,
-  enableStorageCapture: true,
-  captureConsole: false,
-} as const;
-
 import path from 'path';
 
 // Resolve project root from packages/shared/constants/dist/ (4 levels up)

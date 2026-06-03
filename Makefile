@@ -1,4 +1,4 @@
-.PHONY: install build dev start stop clean reset migrate-data test lint kill kill-test-app restart-test-app automate
+.PHONY: install build dev start stop clean reset migrate-data test lint kill fixture e2e e2e-headful e2e-keep
 
 # Install dependencies
 install:
@@ -8,7 +8,7 @@ install:
 build:
 	pnpm build
 
-# Start dev servers (API on 3001, Web on 3000, Test App on 3002)
+# Start dev servers (API on 3001, Web on 3000)
 dev:
 	pnpm exec turbo dev --concurrency 20
 
@@ -21,29 +21,33 @@ start:
 kill:
 	-lsof -ti:3000 | xargs kill -9 2>/dev/null
 	-lsof -ti:3001 | xargs kill -9 2>/dev/null
-	-lsof -ti:3002 | xargs kill -9 2>/dev/null
-	@echo "Ports 3000, 3001, and 3002 cleared"
+	-lsof -ti:3003 | xargs kill -9 2>/dev/null
+	@echo "Ports 3000, 3001, and 3003 cleared"
 
-# Kill test-app on port 3002
-kill-test-app:
-	-lsof -ti:3002 | xargs kill -9 2>/dev/null
-	@echo "Port 3002 cleared"
+# Run the test fixture standalone on :3003 for manual recording.
+# Pass TAKA_PROJECT_ID to attribute recordings to a project.
+fixture:
+	TAKA_PROJECT_ID=$(or $(TAKA_PROJECT_ID),) node packages/app/test-fixture/server.mjs
 
-# Restart test-app (kill, then start in background)
-restart-test-app: kill-test-app
-	@sleep 1
-	cd packages/app/test-app && pnpm dev &
-	@echo "Test app restarting on port 3002"
+# Full hermetic end-to-end test: builds, then spawns its own API + fixture +
+# Chrome, records a session, and asserts record → baseline → pass → regression-fail.
+e2e: build
+	node packages/app/test-fixture/scripts/e2e.mjs
 
-# Run UI automation against test-app (default 5 rounds)
-automate:
-	cd packages/app/test-app && node scripts/automate.mjs --rounds=$(or $(ROUNDS),5) --delay=$(or $(DELAY),600)
+# Same, but with a visible browser for debugging.
+e2e-headful: build
+	E2E_HEADFUL=1 node packages/app/test-fixture/scripts/e2e.mjs
+
+# Run the flow, then leave API + fixture + dashboard up to play with.
+# Ctrl+C tears everything down and cleans the temp data dir.
+e2e-keep: build
+	E2E_KEEP=1 node packages/app/test-fixture/scripts/e2e.mjs
 
 # Clean build artifacts
 clean:
 	find packages -type d -name dist -prune -exec rm -rf {} +
 	find packages -name "*.tsbuildinfo" -delete
-	rm -rf packages/app/web/.next packages/app/test-app/.next .turbo
+	rm -rf packages/app/web/.next .turbo
 	@echo "Build artifacts cleaned"
 
 # Reset data directory

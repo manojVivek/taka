@@ -19,7 +19,7 @@ A PNPM + Turborepo monorepo with three layers: shared packages, libraries, and a
 | `@taka/storage` | `packages/lib/storage` | Pluggable persistence layer (`FileStorage`, `LogOnlyStorage`) | [README](packages/lib/storage/README.md) |
 | `@taka/api` | `packages/app/api` | Express REST API + in-process job queue | [README](packages/app/api/README.md) |
 | `@taka/web` | `packages/app/web` | Next.js dashboard | [README](packages/app/web/README.md) |
-| `@taka/test-app` | `packages/app/test-app` | Sample notes app for recording targets | [README](packages/app/test-app/README.md) |
+| `@taka/test-fixture` | `packages/app/test-fixture` | Minimal HTML fixture + hermetic end-to-end test | [README](packages/app/test-fixture/README.md) |
 | `@taka/worker` | `packages/app/worker` | Stub for future out-of-process worker | [README](packages/app/worker/README.md) |
 
 ### Tech Stack
@@ -57,17 +57,24 @@ That starts:
 |---------|------|-----|
 | Web dashboard | 3000 | http://localhost:3000 |
 | API server | 3001 | http://localhost:3001 |
-| Test-app (recording target) | 3002 | http://localhost:3002 |
 
-Open http://localhost:3000 to see the dashboard, then http://localhost:3002 to interact with the test-app and generate a session.
+Open http://localhost:3000 to see the dashboard. To generate a session, run the end-to-end flow (`make e2e`) or start the fixture standalone (`make fixture`) and click its button.
 
 ## Workflow
 
-1. **Record** — open the test-app at :3002, click around. The recorder ships sessions to the API every few seconds.
-2. **Browse** — sessions appear at http://localhost:3000/sessions.
-3. **Replay** — click "Replay" on a session to queue a test. The API uses `@taka/player` to re-run the session in headless Chrome and capture screenshots.
-4. **Diff** — when a baseline exists, `@taka/differ` compares the head screenshots against the baseline and reports pass/fail.
-5. **Review** — visual diffs show up at http://localhost:3000/tests.
+### Automated (recommended)
+
+`make e2e` runs the whole pipeline hermetically: it spawns its own API + fixture + Chrome on a temp data dir, records a click, then asserts **record → baseline → unchanged-passes → regression-fails**, and tears everything down. Exit code 0 means the pipeline is healthy end to end.
+
+`make e2e-keep` runs the same flow but leaves the API + fixture + dashboard running afterward (with the recorded session and all three test runs already populated) so you can explore in the UI; Ctrl+C tears it down. See [`packages/app/test-fixture/README.md`](packages/app/test-fixture/README.md) for the full architecture.
+
+### Manual
+
+1. **Record** — `make fixture` (serves the button page on :3003), open it, click. The recorder ships the session to the API.
+2. **Browse** — sessions appear at http://localhost:3000.
+3. **Replay** — click "Replay" on a session; the API uses `@taka/player` to re-run it in headless Chrome and capture screenshots.
+4. **Diff** — when a baseline exists, `@taka/differ` compares head vs baseline and reports pass/fail.
+5. **Review** — visual diffs show up under the project's tests.
 
 ## Make targets
 
@@ -76,12 +83,13 @@ The project ships a `Makefile` with common operations. Always prefer these over 
 | Target | Description |
 |--------|-------------|
 | `make install` | Install workspace dependencies |
-| `make dev` | Start API + web + test-app together (concurrency 20) |
-| `make build` | Build all packages |
-| `make kill` | Kill ports 3000, 3001, 3002 |
-| `make kill-test-app` | Kill just the test-app on port 3002 |
-| `make restart-test-app` | Kill and restart test-app in the background |
-| `make automate ROUNDS=N DELAY=ms` | Drive the test-app with Puppeteer to generate sessions |
+| `make dev` | Start API + web together (concurrency 20) |
+| `make build` | Build all packages (incl. the recorder browser bundle) |
+| `make e2e` | Hermetic end-to-end test (record → baseline → pass → regression-fail) |
+| `make e2e-headful` | Same, with a visible browser for debugging |
+| `make e2e-keep` | Run the flow, then leave API + fixture + dashboard up to explore (Ctrl+C to tear down) |
+| `make fixture` | Run the test fixture standalone on :3003 for manual recording |
+| `make kill` | Kill ports 3000, 3001, 3003 |
 | `make health` | Check API health endpoint |
 | `make clean` | Remove `dist/`, `.next/`, and `.turbo/` |
 | `make reset` | Wipe `./data/` and recreate session directories |
@@ -144,9 +152,10 @@ Most of the platform is functional end-to-end. You can record a session, replay 
   - Getting-started — install snippet pre-filled with the project's id, live "waiting for first session" panel that auto-redirects on arrival
   - Settings — rename, accent color (read-only, derived from id), delete with typed-confirmation
   - Project switcher in the sidebar (dropdown with all projects + back-to-list)
-- **Test-app** (`@taka/test-app`)
-  - Notes CRUD with recorder pre-wired
-  - Puppeteer automation script for generating realistic sessions
+- **Test fixture + e2e** (`@taka/test-fixture`)
+  - Minimal deterministic button page with the recorder wired in via a `<script>` tag
+  - Server-side "regression mode" that flips the output to a red background for a guaranteed visual diff
+  - Hermetic `make e2e` orchestrator: spawns API + fixture + Chrome, records, and asserts record → baseline → pass → regression-fail
 
 ### In progress / not yet built
 

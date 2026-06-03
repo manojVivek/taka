@@ -61,7 +61,7 @@ pnpm build  # Production build
 pnpm start  # Serve production build
 ```
 
-Or from the repo root: `make dev` (starts web + API + test-app together).
+Or from the repo root: `make dev` (starts web + API together).
 
 ## Configuration
 

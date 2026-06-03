@@ -1,6 +1,6 @@
 import type { RecorderConfig } from '@taka/types';
-import { DEFAULT_CONFIG } from '@taka/constants';
 import { generateId, debounce } from '@taka/utils';
+import { DEFAULT_CONFIG } from './defaults';
 import type { RecorderInstance, RecorderState } from './types';
 import { EventCapture } from './eventCapture';
 import { NetworkCapture } from './networkCapture';

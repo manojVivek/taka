@@ -125,7 +125,7 @@ pnpm start  # Run compiled output
 TAKA_STORAGE=logOnly pnpm dev
 ```
 
-Or from the repo root: `make dev` (starts API + web + test-app together).
+Or from the repo root: `make dev` (starts API + web together).
 
 ## Health check
 

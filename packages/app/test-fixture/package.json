@@ -1,0 +1,17 @@
+{
+  "name": "@taka/test-fixture",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "e2e": "node scripts/e2e.mjs"
+  },
+  "dependencies": {
+    "@taka/recorder": "workspace:*",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^24.37.5"
+  }
+}

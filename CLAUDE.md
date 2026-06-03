@@ -362,12 +362,13 @@ This ultra-simplified architecture removes Redis entirely and uses in-memory/fil
 ### Use the Makefile for repeated commands
 Always use `make` targets instead of running raw commands. The project Makefile has targets for all common operations:
 
-- `make dev` — Start all dev servers (API 3001, Web 3000, Test App 3002)
-- `make build` — Build all packages
-- `make kill` — Kill all dev server ports
-- `make kill-test-app` — Kill just the test-app (port 3002)
-- `make restart-test-app` — Restart the test-app
-- `make automate ROUNDS=5 DELAY=600` — Run UI automation against the test-app
+- `make dev` — Start dev servers (API 3001, Web 3000)
+- `make build` — Build all packages (incl. the recorder browser bundle)
+- `make e2e` — Hermetic end-to-end test (record → baseline → pass → regression-fail)
+- `make e2e-headful` — Same, with a visible browser for debugging
+- `make e2e-keep` — Run the flow, then leave API + fixture + dashboard up to explore (Ctrl+C tears down)
+- `make fixture` — Run the test fixture standalone on :3003 for manual recording
+- `make kill` — Kill all dev server ports (3000, 3001, 3003)
 - `make health` — Check API health
 - `make clean` — Clean build artifacts
 - `make reset` — Reset data directory
