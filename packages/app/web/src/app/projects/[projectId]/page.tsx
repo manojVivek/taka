@@ -14,6 +14,7 @@ import { Button } from '@/components/taka/Button';
 import { Ico } from '@/components/taka/Icons';
 import { Spinner } from '@/components/taka/Spinner';
 import { ThemeToggle } from '@/components/taka/ThemeToggle';
+import { ReplayDialog } from '@/components/taka/ReplayDialog';
 
 type BadgeKind = 'passed' | 'failed' | 'running' | 'pending';
 
@@ -37,7 +38,7 @@ function dotColorForTest(status: TestExecution['status']): string {
 export default function ProjectDashboardPage() {
   const project = useProject();
   const router = useRouter();
-  const [replaying, setReplaying] = useState(false);
+  const [replayOpen, setReplayOpen] = useState(false);
 
   const { data: stats } = useApi(() => api.getSessionStats(project.id), {
     deps: [project.id],
@@ -58,17 +59,7 @@ export default function ProjectDashboardPage() {
 
   const activeQueue = (queue?.pending ?? 0) + (queue?.running ?? 0);
   const recents = sessions?.sessions ?? [];
-
-  const replayLatest = async () => {
-    if (!recents.length || replaying) return;
-    setReplaying(true);
-    try {
-      const result = await api.replaySession(project.id, recents[0].id);
-      router.push(`/projects/${project.id}/tests/${result.testId}`);
-    } finally {
-      setReplaying(false);
-    }
-  };
+  const latest = recents[0];
 
   return (
     <>
@@ -77,9 +68,9 @@ export default function ProjectDashboardPage() {
         right={
           <>
             <ThemeToggle />
-            <Button variant="primary" onClick={replayLatest} disabled={!recents.length || replaying}>
+            <Button variant="primary" onClick={() => setReplayOpen(true)} disabled={!latest}>
               <Ico.Play className="ico" />
-              {replaying ? 'starting…' : 'replay latest'}
+              replay latest
             </Button>
           </>
         }
@@ -248,6 +239,20 @@ export default function ProjectDashboardPage() {
           </div>
         </div>
       </div>
+
+      {replayOpen && latest && (
+        <ReplayDialog
+          projectId={project.id}
+          sessionId={latest.id}
+          sessionUrl={latest.url}
+          sessionLabel={latest.title || undefined}
+          onClose={() => setReplayOpen(false)}
+          onStarted={testId => {
+            setReplayOpen(false);
+            router.push(`/projects/${project.id}/tests/${testId}`);
+          }}
+        />
+      )}
     </>
   );
 }

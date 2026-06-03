@@ -12,6 +12,8 @@ interface TestOptions {
   headCommit?: string;
   timeout?: number;
   viewport?: { width: number; height: number };
+  /** Replay against this origin (a preview/staging deployment) instead of the recorded one. */
+  targetOrigin?: string;
 }
 
 interface ComparisonOptions {
@@ -165,11 +167,21 @@ export class TestService {
 
       const collected: CapturedScreenshot[] = [];
       const playbackResult = await this.sessionPlayer.replay(sessionData, {
+        targetOrigin: options.targetOrigin,
         onScreenshot: async (meta, bytes) => {
           await this.storage.putTestScreenshot(projectId, testId, meta.filename, bytes);
           collected.push({ meta, bytes });
         },
       });
+
+      // Provenance for the run: the origin the session was recorded on, and the
+      // origin we actually replayed against (when rebased onto a preview).
+      let sourceOrigin: string | undefined;
+      try {
+        sourceOrigin = new URL(sessionData.url).origin;
+      } catch {
+        sourceOrigin = undefined;
+      }
 
       const hasBaseline = await this.sessionService.hasBaseline(projectId, sessionData.id);
 
@@ -251,6 +263,8 @@ export class TestService {
         diffs,
         createdAt: testExecution.createdAt,
         isBaseline,
+        targetOrigin: options.targetOrigin,
+        sourceOrigin,
       };
 
       await this.storage.saveTestResult(projectId, testId, testResult);

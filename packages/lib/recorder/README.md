@@ -16,6 +16,8 @@ The recorder is the browser-side instrumentation that turns real user sessions i
 
 Sensitive fields (passwords, emails, credit card inputs) are filtered automatically.
 
+> **Origin-portable by design.** Navigation and network URLs are recorded as **absolute** URLs (`window.location.href`, resolved request URLs), so a session always carries the origin it was recorded on. No recorder changes are needed to replay a session against a different deployment — the player derives the source origin from the stored session and rebases onto a `targetOrigin` at replay time (see the [player README](../player/README.md#replaying-against-a-different-origin)).
+
 ## Installation
 
 This package is part of the workspace and is installed automatically via PNPM. To use it inside another workspace package:

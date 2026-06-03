@@ -66,6 +66,17 @@ Every session, test, and blob endpoint lives under `/api/projects/:projectId/...
 | `POST` | `/api/projects/:projectId/tests/run` | Run a test from raw session data |
 | `POST` | `/api/projects/:projectId/tests/compare` | Compare baselines between two sessions in the project |
 
+#### Replay target (`targetOrigin`)
+
+Both replay entry points accept an optional **`targetOrigin`** so a recorded session can be validated against a different deployment — a Vercel-style preview, staging, or local dev — while diffing against the baseline captured on the recorded origin:
+
+- `POST /sessions/:id/replay` — top-level body field: `{ "targetOrigin": "https://preview-xyz.vercel.app" }`
+- `POST /tests/run` — inside `options`: `{ "sessionData": …, "options": { "targetOrigin": "…" } }`
+
+The value is **normalized + validated** server-side (`src/utils/origin.ts`): a bare host (`preview.example.com`, `localhost:3004`) gets a scheme assumed (`http://` for loopback hosts, `https://` otherwise), full URLs are reduced to their origin (path/query dropped), and anything non-http(s) or unparseable is rejected with **400**. Absent/empty → replay on the recorded origin (unchanged behavior). The player rebases same-origin URLs onto the target and leaves cross-origin URLs as recorded (see the [player README](../../lib/player/README.md#replaying-against-a-different-origin)); the resulting `TestResult` carries `targetOrigin` and `sourceOrigin` for display.
+
+> **Known limitation:** restored auth cookies are re-scoped to the target hostname (domain + path) but their `secure`/`sameSite` attributes are not re-derived. Auth-gated HTTPS previews that require `Secure`/`SameSite=None` cookies may not authenticate correctly yet.
+
 ### Blob endpoints
 
 | Method | Path | Description |

@@ -7,13 +7,14 @@ import type { SessionEvent } from '@taka/types';
 import { useProject } from '@/lib/projectContext';
 import { useApi } from '@/lib/hooks';
 import { api } from '@/lib/api';
-import { formatDateTime, formatRelativeTime, formatDuration, getBrowserName, truncateId } from '@/lib/utils';
+import { formatRelativeTime, formatDuration, getBrowserName, truncateId, originOf } from '@/lib/utils';
 import { Topbar } from '@/components/taka/Topbar';
 import { Panel, PanelHead } from '@/components/taka/Panel';
 import { Button } from '@/components/taka/Button';
 import { Ico, type IconKey } from '@/components/taka/Icons';
 import { Spinner } from '@/components/taka/Spinner';
 import { ThemeToggle } from '@/components/taka/ThemeToggle';
+import { ReplayDialog } from '@/components/taka/ReplayDialog';
 
 const EVENT_ICON: Record<string, IconKey> = {
   click: 'Click',
@@ -36,7 +37,7 @@ export default function SessionDetailPage() {
   const params = useParams<{ id: string }>();
   const sessionId = params.id;
   const [filter, setFilter] = useState<Filter>('all');
-  const [replaying, setReplaying] = useState(false);
+  const [replayOpen, setReplayOpen] = useState(false);
 
   const { data: session, loading, error } = useApi(() => api.getSession(project.id, sessionId), {
     deps: [project.id, sessionId],
@@ -78,16 +79,6 @@ export default function SessionDetailPage() {
     const max = Math.max(...bins, 1);
     return bins.map(v => v / max);
   }, [events, durationMs, sessionStart]);
-
-  const replay = async () => {
-    setReplaying(true);
-    try {
-      const result = await api.replaySession(project.id, sessionId);
-      router.push(`/projects/${project.id}/tests/${result.testId}`);
-    } finally {
-      setReplaying(false);
-    }
-  };
 
   const deleteSession = async () => {
     if (!confirm('delete this session? this cannot be undone.')) return;
@@ -131,9 +122,9 @@ export default function SessionDetailPage() {
               <Ico.External className="ico" />
               open url
             </a>
-            <Button variant="primary" onClick={replay} disabled={replaying}>
+            <Button variant="primary" onClick={() => setReplayOpen(true)}>
               <Ico.Play className="ico" />
-              {replaying ? 'starting…' : 'replay as test'}
+              replay as test
             </Button>
             <Button variant="danger" onClick={deleteSession}>
               <Ico.Trash className="ico" />
@@ -161,6 +152,7 @@ export default function SessionDetailPage() {
               </div>
             </div>
             <div className="ml-auto flex flex-wrap gap-7">
+              <MetaTile k="origin" v={originOf(session.url)} />
               <MetaTile k="captured" v={formatRelativeTime(session.timestamp)} />
               <MetaTile k="duration" v={formatDuration(durationMs)} />
               <MetaTile k="events" v={String(events.length)} />
@@ -282,6 +274,20 @@ export default function SessionDetailPage() {
           ← back to sessions
         </Link>
       </div>
+
+      {replayOpen && (
+        <ReplayDialog
+          projectId={project.id}
+          sessionId={sessionId}
+          sessionUrl={session.url}
+          sessionLabel={session.metadata.title || undefined}
+          onClose={() => setReplayOpen(false)}
+          onStarted={testId => {
+            setReplayOpen(false);
+            router.push(`/projects/${project.id}/tests/${testId}`);
+          }}
+        />
+      )}
     </>
   );
 }

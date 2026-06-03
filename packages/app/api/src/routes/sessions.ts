@@ -1,5 +1,6 @@
 import express from 'express';
 import type { SessionData } from '@taka/types';
+import { normalizeOrigin } from '../utils/origin';
 
 const router = express.Router({ mergeParams: true });
 
@@ -175,11 +176,23 @@ router.post('/:id/replay', async (req, res) => {
       });
     }
 
+    // Optional replay target — replay against a preview/staging deployment
+    // instead of the recorded origin. Normalize + validate; reject bad input.
+    let targetOrigin: string | undefined;
+    if (req.body.targetOrigin != null && String(req.body.targetOrigin).trim() !== '') {
+      const norm = normalizeOrigin(String(req.body.targetOrigin));
+      if (!norm.ok) {
+        return res.status(400).json({ error: 'Invalid targetOrigin', message: norm.error });
+      }
+      targetOrigin = norm.origin;
+    }
+
     const testOptions = {
       baseCommit: req.body.baseCommit,
       headCommit: req.body.headCommit,
       timeout: req.body.timeout,
       viewport: req.body.viewport,
+      targetOrigin,
     };
 
     const testId = await req.testService.runTest(pid, session, testOptions);

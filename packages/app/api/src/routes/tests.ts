@@ -1,4 +1,5 @@
 import express from 'express';
+import { normalizeOrigin } from '../utils/origin';
 
 const router = express.Router({ mergeParams: true });
 
@@ -144,6 +145,17 @@ router.post('/run', async (req, res) => {
         error: 'Invalid request',
         message: 'Missing sessionData with required fields: id, events',
       });
+    }
+
+    // Normalize + validate an optional replay target (preview/staging origin).
+    if (options.targetOrigin != null && String(options.targetOrigin).trim() !== '') {
+      const norm = normalizeOrigin(String(options.targetOrigin));
+      if (!norm.ok) {
+        return res.status(400).json({ error: 'Invalid targetOrigin', message: norm.error });
+      }
+      options.targetOrigin = norm.origin;
+    } else {
+      delete options.targetOrigin;
     }
 
     const pid = projectId(req);

@@ -61,3 +61,49 @@ export function truncateId(id: string, length: number = 8): string {
   if (id.length <= length) return id;
   return id.slice(0, length);
 }
+
+/** The origin (`scheme://host[:port]`) of an absolute URL; falls back to the raw input. */
+export function originOf(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Normalize a user-typed replay target into a bare origin, mirroring the API's
+ * `normalizeOrigin` so the dialog can validate before submitting (and show the
+ * cleaned value). Bare loopback hosts default to http://, everything else https://.
+ */
+export function normalizeOrigin(
+  input: string,
+): { ok: true; origin: string } | { ok: false; error: string } {
+  const trimmed = (input || '').trim();
+  if (!trimmed) return { ok: false, error: 'enter a target origin' };
+
+  let candidate = trimmed;
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
+    let host = '';
+    try {
+      host = new URL(`http://${trimmed}`).hostname;
+    } catch {
+      host = '';
+    }
+    const loopback =
+      host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1';
+    candidate = `${loopback ? 'http' : 'https'}://${trimmed}`;
+  }
+
+  let u: URL;
+  try {
+    u = new URL(candidate);
+  } catch {
+    return { ok: false, error: 'not a valid URL or host' };
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    return { ok: false, error: 'only http/https origins are supported' };
+  }
+  if (!u.hostname) return { ok: false, error: 'missing host' };
+  return { ok: true, origin: u.origin };
+}

@@ -11,6 +11,7 @@ The player takes a `SessionData` object produced by the recorder and replays it 
 - **Deterministic replay** — events fired in original order with timing controls
 - **Auth state restoration** — cookies, localStorage, and sessionStorage restored before navigation; JWT `exp` claims patched to prevent client-side expiry redirects
 - **Network mocking** — recorded HTTP responses returned via Puppeteer request interception, so the replay never depends on a live backend
+- **Cross-origin replay** — a recorded session can be replayed against an arbitrary `targetOrigin` (a Vercel-style preview, staging, or local dev) without rewriting the stored session; see [Replaying against a different origin](#replaying-against-a-different-origin)
 - **Screenshot capture** — full page, viewport, or element PNGs emitted as `Buffer`s via callback
 - **Replay flag** — sets `window.__taka_replay = true` so the recorder skips initialization during replay
 - **No filesystem dependency** — the player is pure; storage is the caller's concern
@@ -30,6 +31,9 @@ const player = new SessionPlayer({
 await player.initialize();
 
 const result = await player.replay(sessionData, {
+  // Optional: replay against a preview deployment instead of the recorded origin.
+  // Omit (or set equal to the recorded origin) for a normal same-origin replay.
+  targetOrigin: 'https://preview-xyz.vercel.app',
   onScreenshot: async (meta, bytes) => {
     // meta: { filename, eventIndex, eventType, timestamp }
     // bytes: Buffer (PNG)
@@ -73,6 +77,7 @@ The `onScreenshot` callback fires for the initial page state, after each visuall
 | Field | Type | Description |
 |-------|------|-------------|
 | `onScreenshot` | `(meta: ScreenshotMeta, bytes: Buffer) => Promise<void>` | Optional. Invoked once per captured screenshot. The caller persists, uploads, or discards as desired. |
+| `targetOrigin` | `string` | Optional. Replay against this origin (e.g. `https://preview.example.com`) instead of the one the session was recorded on. Same-origin URLs are rebased onto it; cross-origin URLs are left as recorded. Absent or equal to the recorded origin → no rebasing. |
 
 ### `ScreenshotMeta`
 
@@ -83,6 +88,25 @@ The `onScreenshot` callback fires for the initial page state, after each visuall
 | `eventType` | `string` | `initial`, the event type, or `final` |
 | `timestamp` | `number` | Capture time in ms |
 
+## Replaying against a different origin
+
+Sessions are stored **exactly as recorded** (URLs are absolute), so the recording origin is always recoverable as `new URL(sessionData.url).origin`. Passing a `targetOrigin` to `replay()` makes the session **portable to any deployment** without rewriting stored data — the original recording is the *source* origin, derived per-session, so a project that mixes recording origins (local dev, staging, QA) rebases each session from the right place automatically.
+
+Given a `targetOrigin`, the player rebases **same-origin** URLs (those whose origin equals the source) onto the target and leaves **cross-origin** URLs (CDNs, third-party APIs, a separate API origin) as recorded. The helper is `rebaseUrl(url, sourceOrigin, targetOrigin)` (exported), applied at four sites:
+
+| Site | What gets rebased |
+|------|-------------------|
+| initial navigation | `page.goto(sessionData.url)` → the target |
+| network mock map | mock keys (`METHOD:url`) so a same-origin fetch/XHR on the target matches its recorded response |
+| navigation events | replayed `navigation` event URLs |
+| auth cookies | restored-cookie **domain** → the target's hostname |
+
+Why same-origin-only is correct even for API calls: the player **mocks** recorded fetch/XHR (it never hits them live), so the app's own JS/CSS/images — which aren't mocked — load **live from the target**, which is exactly the preview you want to test. Same-origin API calls still get their recorded responses because the mock-map keys are rebased; a separate API origin matches its recorded absolute URL without rebasing.
+
+> **Known limitation:** cookies are re-scoped to the target hostname (domain + path) but their `secure`/`sameSite` attributes are not re-derived. Auth-gated HTTPS previews that require `Secure`/`SameSite=None` cookies may not authenticate correctly yet.
+>
+> **Future:** multi-origin apps (several app origins that must each map to a corresponding preview) are a clean extension via an origin *map* (`{sourceA: targetA, …}`) over the same `rebaseUrl` mechanism; v1 supports a single target.
+
 ## Chrome path
 
 By default the player launches the system Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`. Override with the `CHROME_PATH` environment variable.
@@ -92,6 +116,7 @@ By default the player launches the system Chrome at `/Applications/Google Chrome
 | File | Responsibility |
 |------|----------------|
 | `player.ts` | `SessionPlayer` class — browser lifecycle, replay loop, auth restoration, network mocking |
+| `rebase.ts` | `rebaseUrl` / `rebaseHostname` — swap same-origin URLs onto a `targetOrigin` for cross-origin replay |
 | `screenshot.ts` | `ScreenshotCapture` class — invokes `page.screenshot()` and returns `{ meta, bytes }` |
 | `types.ts` | `PlayerConfig`, `PlaybackResult`, `ReplayOptions`, `ScreenshotMeta`, `ScreenshotSink` |
 

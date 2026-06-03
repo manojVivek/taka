@@ -119,6 +119,7 @@ Most of the platform is functional end-to-end. You can record a session, replay 
   - JWT `exp` claim patching to prevent client-side expiry redirects
   - Network mocking using recorded responses
   - Screenshot capture at significant events
+  - Cross-origin replay — rebase a recorded session onto an arbitrary `targetOrigin` (a Vercel-style preview, staging, or local dev) without rewriting stored data; same-origin URLs follow the target, cross-origin URLs stay as recorded
 - **Visual diffing** (`@taka/differ`)
   - Pixelmatch + Sharp pixel comparison
   - Diff image generation
@@ -129,6 +130,7 @@ Most of the platform is functional end-to-end. You can record a session, replay 
   - Project CRUD (`/api/projects`) with cascade delete
   - Project-scoped sessions (`/api/projects/:projectId/sessions`) — CRUD, search, stats
   - Project-scoped test execution (`/api/projects/:projectId/tests/run`, `/api/projects/:projectId/tests/:id`)
+  - Optional `targetOrigin` on replay — normalized + validated server-side — to run a session against a preview/staging deployment; the result records `targetOrigin`/`sourceOrigin`
   - Every route is project-scoped (`/api/projects/:projectId/...`); requests with an unknown project id return 404
   - In-process job queue with `p-queue`
   - Blob endpoints for screenshots and diffs (streamed through `@taka/storage`, not filesystem-bound)
@@ -147,6 +149,7 @@ Most of the platform is functional end-to-end. You can record a session, replay 
   - Per-project dashboard (`/projects/[id]`) — stat tiles, recent sessions, live queue widget
   - Sessions list with search/sort/pagination
   - Session detail with metadata strip, event-density sparkline, filtered event timeline, network panel
+  - Replay-target dialog on every replay trigger (sessions list, session detail, dashboard) — prefilled with the recorded origin, accepts a preview URL; the session's recorded origin is surfaced in the session view and the test detail shows `target:` for cross-origin runs
   - Tests list with status filter, mini frame-strip per row, 2s polling
   - Test detail (the hero) — three-up Baseline/Head/Diff viewer with frame list, jump-to-failure, frame-strip filmstrip
   - Getting-started — install snippet pre-filled with the project's id, live "waiting for first session" panel that auto-redirects on arrival
@@ -156,6 +159,7 @@ Most of the platform is functional end-to-end. You can record a session, replay 
   - Minimal deterministic button page with the recorder wired in via a `<script>` tag
   - Server-side "regression mode" that flips the output to a red background for a guaranteed visual diff
   - Hermetic `make e2e` orchestrator: spawns API + fixture + Chrome, records, and asserts record → baseline → pass → regression-fail
+  - Cross-origin validation: a second fixture on :3004 stands in for a preview; the orchestrator replays the :3003-recorded session against it and asserts stable-pass / regression-fail
 
 ### In progress / not yet built
 
@@ -174,6 +178,7 @@ Most of the platform is functional end-to-end. You can record a session, replay 
 4. Add a GitHub Action that runs `pnpm taka test` and posts results on PRs
 5. Add an S3-backed `Storage` implementation + screenshot CDN
 6. Multi-user auth and per-project session isolation
+7. Multi-origin replay map (`{sourceA: targetA, …}`) for micro-frontends / app+API previews — a clean extension of the single-`targetOrigin` rebasing
 
 ## Storage Layout
 

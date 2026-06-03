@@ -3,6 +3,7 @@ import type { SessionData, SessionEvent } from '@taka/types';
 import { sleep } from '@taka/utils';
 import type { PlayerConfig, PlaybackResult, ReplayOptions, ScreenshotMeta } from './types';
 import { ScreenshotCapture } from './screenshot';
+import { rebaseUrl, rebaseHostname } from './rebase';
 
 export class SessionPlayer {
   private browser?: Browser;
@@ -62,6 +63,21 @@ export class SessionPlayer {
       }
     };
 
+    // The origin this session was recorded on (the rebase *source*). Derived
+    // per-session from its own URL — never a project-wide constant — so a
+    // project that mixes recording origins (local dev, staging, …) rebases each
+    // session from the right place. Unparseable → '' → rebasing is a no-op.
+    let sourceOrigin = '';
+    try {
+      sourceOrigin = new URL(sessionData.url).origin;
+    } catch {
+      // leave empty; rebaseUrl/rebaseHostname degrade to identity
+    }
+    const targetOrigin = options.targetOrigin;
+    if (targetOrigin && targetOrigin !== sourceOrigin) {
+      console.log(`[Player] Rebasing replay: ${sourceOrigin || '(unknown source)'} → ${targetOrigin}`);
+    }
+
     let page: Page | undefined;
 
     try {
@@ -77,7 +93,7 @@ export class SessionPlayer {
       await page.setViewport(this.config.viewport);
 
       // Set up network interception for recorded responses
-      await this.setupNetworkMocking(page, sessionData);
+      await this.setupNetworkMocking(page, sessionData, sourceOrigin, targetOrigin);
 
       // Set replay flag before any page scripts run to prevent recorder from initializing
       await page.evaluateOnNewDocument(() => {
@@ -85,11 +101,12 @@ export class SessionPlayer {
       });
 
       // Restore auth state (cookies + storage) before navigation
-      await this.restoreAuthState(page, sessionData);
+      await this.restoreAuthState(page, sessionData, sourceOrigin, targetOrigin);
 
-      // Navigate to the initial URL
-      console.log('[Player] Navigating to:', sessionData.url);
-      await page.goto(sessionData.url, {
+      // Navigate to the initial URL (rebased onto the target origin when set)
+      const initialUrl = rebaseUrl(sessionData.url, sourceOrigin, targetOrigin);
+      console.log('[Player] Navigating to:', initialUrl);
+      await page.goto(initialUrl, {
         waitUntil: 'networkidle0',
         timeout: this.config.timeout
       });
@@ -104,7 +121,7 @@ export class SessionPlayer {
         const event = sessionData.events[i];
 
         try {
-          await this.replayEvent(page, event, i);
+          await this.replayEvent(page, event, i, sourceOrigin, targetOrigin);
 
           // Take screenshot after each significant event
           if (this.shouldTakeScreenshot(event)) {
@@ -148,11 +165,20 @@ export class SessionPlayer {
     }
   }
 
-  private async setupNetworkMocking(page: Page, sessionData: SessionData): Promise<void> {
-    // Create a map of recorded network requests for quick lookup
+  private async setupNetworkMocking(
+    page: Page,
+    sessionData: SessionData,
+    sourceOrigin: string,
+    targetOrigin?: string,
+  ): Promise<void> {
+    // Create a map of recorded network requests for quick lookup. Keys are
+    // rebased onto the target origin so that a same-origin fetch/XHR issued by
+    // the page on the *target* deployment matches its recorded response.
+    // Cross-origin requests keep their recorded absolute URL (rebaseUrl is an
+    // identity for them), so a separate API origin still matches.
     const networkMap = new Map();
     sessionData.networkRequests.forEach(request => {
-      const key = `${request.method}:${request.url}`;
+      const key = `${request.method}:${rebaseUrl(request.url, sourceOrigin, targetOrigin)}`;
       networkMap.set(key, request);
     });
 
@@ -177,7 +203,13 @@ export class SessionPlayer {
     });
   }
 
-  private async replayEvent(page: Page, event: SessionEvent, index: number): Promise<void> {
+  private async replayEvent(
+    page: Page,
+    event: SessionEvent,
+    index: number,
+    sourceOrigin: string,
+    targetOrigin?: string,
+  ): Promise<void> {
     console.log(`[Player] Replaying event ${index}: ${event.type}`);
     
     // Add small delay to make replay more deterministic
@@ -197,7 +229,7 @@ export class SessionPlayer {
         break;
         
       case 'navigation':
-        await this.replayNavigation(page, event);
+        await this.replayNavigation(page, event, sourceOrigin, targetOrigin);
         break;
         
       case 'submit':
@@ -278,13 +310,21 @@ export class SessionPlayer {
     }
   }
 
-  private async replayNavigation(page: Page, event: SessionEvent): Promise<void> {
-    if (event.data?.url && event.data.url !== page.url()) {
-      console.log('[Player] Navigating to:', event.data.url);
-      await page.goto(event.data.url, { 
-        waitUntil: 'networkidle0',
-        timeout: this.config.timeout 
-      });
+  private async replayNavigation(
+    page: Page,
+    event: SessionEvent,
+    sourceOrigin: string,
+    targetOrigin?: string,
+  ): Promise<void> {
+    if (event.data?.url) {
+      const dest = rebaseUrl(event.data.url, sourceOrigin, targetOrigin);
+      if (dest !== page.url()) {
+        console.log('[Player] Navigating to:', dest);
+        await page.goto(dest, {
+          waitUntil: 'networkidle0',
+          timeout: this.config.timeout
+        });
+      }
     }
   }
 
@@ -323,12 +363,20 @@ export class SessionPlayer {
     }
   }
 
-  private async restoreAuthState(page: Page, sessionData: SessionData): Promise<void> {
+  private async restoreAuthState(
+    page: Page,
+    sessionData: SessionData,
+    sourceOrigin: string,
+    targetOrigin?: string,
+  ): Promise<void> {
     if (!sessionData.storageSnapshot) return;
 
     console.log('[Player] Restoring auth state from storage snapshot');
     const { localStorage, sessionStorage, cookies } = sessionData.storageSnapshot;
-    const url = new URL(sessionData.url);
+    // Scope restored cookies to the origin we're actually replaying against, so
+    // auth cookies apply on a preview deployment too. (secure/sameSite are not
+    // re-derived here — a known limitation for auth-gated HTTPS previews.)
+    const cookieDomain = rebaseHostname(sourceOrigin, targetOrigin);
 
     // Restore cookies (as session cookies — no expiry, so they persist for replay)
     const cookieEntries = Object.entries(cookies);
@@ -337,7 +385,7 @@ export class SessionPlayer {
         ...cookieEntries.map(([name, value]) => ({
           name,
           value,
-          domain: url.hostname,
+          domain: cookieDomain,
           path: '/',
         }))
       );

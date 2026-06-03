@@ -31,9 +31,14 @@ const REPO_ROOT = resolve(__dirname, '..', '..', '..', '..');
 
 const API_PORT = 3001;
 const FIXTURE_PORT = 3003;
+// A second fixture instance on another port stands in for a Vercel-style
+// "preview" deployment — the target a recorded session is replayed against to
+// validate it cross-origin. Same server code as the primary fixture.
+const PREVIEW_PORT = 3004;
 const WEB_PORT = 3000;
 const API_BASE = `http://localhost:${API_PORT}/api`;
 const FIXTURE_URL = `http://localhost:${FIXTURE_PORT}`;
+const PREVIEW_URL = `http://localhost:${PREVIEW_PORT}`;
 const WEB_URL = `http://localhost:${WEB_PORT}`;
 const PROJECT_ID = 'e2e';
 const CHROME_PATH =
@@ -154,10 +159,10 @@ async function teardown() {
 }
 
 // ---- replay helper --------------------------------------------------------
-async function replayAndWait(sessionId, label) {
+async function replayAndWait(sessionId, label, body = {}) {
   const { body: started } = await fetchJson(
     `${API_BASE}/projects/${PROJECT_ID}/sessions/${sessionId}/replay`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
   );
   const testId = started?.testId;
   if (!testId) throw new Error(`${label}: replay did not return a testId (${JSON.stringify(started)})`);
@@ -173,8 +178,8 @@ async function replayAndWait(sessionId, label) {
   return { testId, test, result };
 }
 
-async function setMode(mode) {
-  const { body } = await fetchJson(`${FIXTURE_URL}/__mode`, {
+async function setMode(mode, base = FIXTURE_URL) {
+  const { body } = await fetchJson(`${base}/__mode`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mode }),
@@ -259,6 +264,58 @@ async function runScenario(browser, scenario) {
   }
 }
 
+// ---- cross-origin (preview-environment) validation ------------------------
+// Record-on-A / replay-on-B: prove a session recorded on the primary fixture
+// (:3003) can be replayed against a *different* origin — the "preview" (:3004) —
+// via `targetOrigin`, diffing against the baseline captured on the original
+// origin. Both ports run the same fixture code, so B-stable matches A's
+// baseline (pass), while flipping B to regression yields a failing diff. This
+// reuses the click session recorded in the scenario loop (its baseline was
+// established on A), so it must run after the loop.
+async function crossOriginCheck() {
+  step('Cross-origin replay — recorded on :3003, replayed against :3004 (preview)');
+
+  const { body: list } = await fetchJson(`${API_BASE}/projects/${PROJECT_ID}/sessions?limit=50`);
+  const summary = (list?.sessions || []).find(s => s.url && s.url.endsWith('/click'));
+  if (
+    !assert(
+      !!summary,
+      'found the recorded click session to reuse (baseline captured on :3003)',
+      (list?.sessions || []).map(s => s.url),
+    )
+  ) {
+    return;
+  }
+  const sessionId = summary.id;
+
+  // Both origins render identically in stable mode before the matching replay.
+  await setMode('stable', FIXTURE_URL);
+  await setMode('stable', PREVIEW_URL);
+
+  const pass = await replayAndWait(sessionId, 'xorigin#stable', { targetOrigin: PREVIEW_URL });
+  const passFailing = (pass.result?.diffs ?? []).filter(d => !d.passed);
+  assert(
+    pass.test.status === 'completed' && passFailing.length === 0,
+    'replay against preview (stable) PASSES — rebased nav matched the baseline',
+    { status: pass.test.status, failing: passFailing.length },
+  );
+  assert(
+    pass.result?.targetOrigin === PREVIEW_URL,
+    `test result records target origin = ${PREVIEW_URL}`,
+    { targetOrigin: pass.result?.targetOrigin, sourceOrigin: pass.result?.sourceOrigin },
+  );
+
+  await setMode('regression', PREVIEW_URL);
+  const failr = await replayAndWait(sessionId, 'xorigin#regression', { targetOrigin: PREVIEW_URL });
+  const failFailing = (failr.result?.diffs ?? []).filter(d => !d.passed);
+  assert(
+    failr.test.status === 'failed' && failFailing.length >= 1,
+    'replay against preview (regression) FAILS — visual change detected on the preview',
+    { status: failr.test.status, failing: failFailing.length },
+  );
+  await setMode('stable', PREVIEW_URL); // leave the preview clean
+}
+
 // ---- keep-alive (E2E_KEEP=1) ----------------------------------------------
 async function keepAlive() {
   // Reset the fixture to stable so the page renders normally when opened.
@@ -295,6 +352,7 @@ async function keepAlive() {
 \x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m
   dashboard   ${WEB_URL}/projects/${PROJECT_ID}
   fixture     ${FIXTURE_URL}   (scenarios: ${scenarios.map(s => '/' + s.id).join(', ')})
+  preview     ${PREVIEW_URL}   (cross-origin replay target — try it in the Replay dialog)
   api         ${API_BASE}
   project     ${PROJECT_ID}   (one recorded session + 3 test runs per scenario)
   data dir    ${dataDir}   (temp — removed on teardown)
@@ -353,6 +411,18 @@ async function main() {
   });
   ok('fixture is healthy');
 
+  step('Start preview fixture (cross-origin replay target)');
+  spawnProc('preview', 'node', ['packages/app/test-fixture/server.mjs'], {
+    FIXTURE_PORT: String(PREVIEW_PORT),
+    TAKA_PROJECT_ID: PROJECT_ID,
+    TAKA_API_ENDPOINT: API_BASE,
+  });
+  await waitFor('preview fixture health', async () => {
+    const { status } = await fetchJson(`${PREVIEW_URL}/health`);
+    return status === 200;
+  });
+  ok('preview fixture is healthy');
+
   const browser = await puppeteer.launch({
     headless: HEADFUL ? false : 'new',
     executablePath: CHROME_PATH,
@@ -366,6 +436,10 @@ async function main() {
   } finally {
     await browser.close();
   }
+
+  // Cross-origin (preview) validation reuses the recorded click session and
+  // only talks to the API + fixtures, so it runs after the browser is closed.
+  await crossOriginCheck();
 }
 
 main()

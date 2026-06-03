@@ -74,6 +74,10 @@ export interface TestResult {
   screenshotsPath?: string;
   diffsPath?: string;
   isBaseline?: boolean;
+  /** Origin this run replayed against (a preview/staging deployment). Absent → recorded origin. */
+  targetOrigin?: string;
+  /** Origin the session was recorded on, derived from the session URL. Provenance for the run. */
+  sourceOrigin?: string;
 }
 
 export interface VisualDiff {

@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useProject } from '@/lib/projectContext';
@@ -14,6 +13,7 @@ import { Button } from '@/components/taka/Button';
 import { Input } from '@/components/taka/Input';
 import { Ico } from '@/components/taka/Icons';
 import { ThemeToggle } from '@/components/taka/ThemeToggle';
+import { ReplayDialog } from '@/components/taka/ReplayDialog';
 
 const PAGE_SIZE = 20;
 
@@ -23,6 +23,7 @@ export default function SessionsListPage() {
   const [search, setSearch] = useState('');
   const [offset, setOffset] = useState(0);
   const [sortBy, setSortBy] = useState<'timestamp' | 'eventCount'>('timestamp');
+  const [replayFor, setReplayFor] = useState<SessionSummary | null>(null);
 
   const isSearching = search.trim().length > 0;
 
@@ -50,10 +51,6 @@ export default function SessionsListPage() {
     refetch();
   };
 
-  const replaySession = async (s: SessionSummary) => {
-    const result = await api.replaySession(project.id, s.id);
-    router.push(`/projects/${project.id}/tests/${result.testId}`);
-  };
 
   return (
     <>
@@ -135,7 +132,7 @@ export default function SessionsListPage() {
                     <td className="text-dim">{formatRelativeTime(s.timestamp)}</td>
                     <td className="actcell">
                       <div className="flex justify-end gap-1.5" onClick={e => e.stopPropagation()}>
-                        <Button size="sm" onClick={() => replaySession(s)}>
+                        <Button size="sm" onClick={() => setReplayFor(s)}>
                           <Ico.Play className="ico" />
                           replay
                         </Button>
@@ -174,6 +171,20 @@ export default function SessionsListPage() {
           )}
         </Panel>
       </div>
+
+      {replayFor && (
+        <ReplayDialog
+          projectId={project.id}
+          sessionId={replayFor.id}
+          sessionUrl={replayFor.url}
+          sessionLabel={replayFor.title || undefined}
+          onClose={() => setReplayFor(null)}
+          onStarted={testId => {
+            setReplayFor(null);
+            router.push(`/projects/${project.id}/tests/${testId}`);
+          }}
+        />
+      )}
     </>
   );
 }

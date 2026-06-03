@@ -18,6 +18,13 @@ export type ScreenshotSink = (meta: ScreenshotMeta, bytes: Buffer) => Promise<vo
 
 export interface ReplayOptions {
   onScreenshot?: ScreenshotSink;
+  /**
+   * Replay the session against this origin instead of the one it was recorded
+   * on (e.g. a preview deployment). Same-origin URLs are rebased onto it;
+   * cross-origin URLs are left as recorded. A normalized origin like
+   * `https://preview.example.com`. Absent → replay on the recorded origin.
+   */
+  targetOrigin?: string;
 }
 
 export interface PlaybackResult {

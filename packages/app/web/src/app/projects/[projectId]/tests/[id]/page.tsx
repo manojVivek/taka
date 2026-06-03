@@ -174,6 +174,12 @@ export default function TestDetailPage() {
                     <span className="lime">baseline run</span>
                   </>
                 )}
+                {result?.targetOrigin && result.targetOrigin !== result.sourceOrigin && (
+                  <>
+                    {' · '}
+                    <span className="text-blue">target: {result.targetOrigin}</span>
+                  </>
+                )}
               </div>
             </div>
             <div className="ml-auto flex flex-wrap gap-7">

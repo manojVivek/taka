@@ -63,6 +63,13 @@ export interface TestsListResponse {
   offset: number;
 }
 
+export interface ReplayOptions {
+  /** Replay against this origin (a preview/staging deployment) instead of the recorded one. */
+  targetOrigin?: string;
+  baseCommit?: string;
+  headCommit?: string;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}${path}`;
   const response = await fetch(url, {
@@ -138,7 +145,7 @@ export const api = {
   deleteSession(projectId: string, id: string) {
     return request<{ success: boolean }>(`/projects/${projectId}/sessions/${id}`, { method: 'DELETE' });
   },
-  replaySession(projectId: string, id: string, options: Record<string, unknown> = {}) {
+  replaySession(projectId: string, id: string, options: ReplayOptions = {}) {
     return request<{ testId: string }>(`/projects/${projectId}/sessions/${id}/replay`, {
       method: 'POST',
       body: JSON.stringify(options),

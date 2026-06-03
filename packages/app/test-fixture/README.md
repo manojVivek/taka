@@ -7,7 +7,7 @@ A minimal, deterministic recording target plus a hermetic end-to-end test for th
 - **`scenarios.mjs`** — the scenario registry. Each entry is one validation case (markup + behavior + optional regression variant) served at its own path. Adding coverage = adding a scenario here. See the [coverage checklist](#coverage-checklist) for what's covered and what's planned.
 - **`server.mjs`** — a tiny Express server (port **3003**) that renders one page per scenario at `/<id>` (e.g. `/click`), an index at `/`, and serves the recorder's standalone IIFE bundle at `/recorder.js`.
 - **A server-side "regression mode"** — `POST /__mode {"mode":"regression"}` flips an in-memory flag so a scenario applies its regression CSS (e.g. the click panel turns red). Same elements, same dimensions — only styling changes, producing a large, unambiguous pixel diff when the same recorded session is replayed.
-- **`scripts/e2e.mjs`** — a self-contained orchestrator that spawns its own API + fixture + Chrome, records a scenario interaction, and asserts the full pipeline.
+- **`scripts/e2e.mjs`** — a self-contained orchestrator that spawns its own API + fixture + Chrome, records a scenario interaction, and asserts the full pipeline. It also starts a **second fixture on :3004** (a stand-in "preview" deployment) and runs a [cross-origin replay](#cross-origin-replay) check.
 
 Each scenario lives on its own page so cases stay isolated and easy to manage — a flaky or in-progress scenario never blocks the others.
 
@@ -31,18 +31,19 @@ Tracks which recorder events / use-cases have a fixture scenario wired through t
 | ⬜ | Network capture + mock | `/network` | fetch / XHR | – | – | – |
 | ⬜ | Storage snapshot / auth restore | `/storage` | storage | – | – | n/a |
 | ⬜ | DOM mutation (observed) | via `/click` & others | `mutation` | – | n/a | n/a |
+| ✅ | Cross-origin replay (preview) | record `/click` on :3003, replay on :3004 | `targetOrigin` | n/a | ✓ | ✓ |
 
 ## Usage
 
 ```bash
-make e2e           # full hermetic test (build + record + 3 replays + asserts), tears down
+make e2e           # full hermetic test (build + record + replays + cross-origin + asserts), tears down
 make e2e-headful   # same, with a visible browser (E2E_HEADFUL=1)
-make e2e-keep      # run the flow, then leave API + fixture + dashboard up to explore
+make e2e-keep      # run the flow, then leave API + both fixtures + dashboard up to explore
 make fixture       # run the fixture standalone on :3003 for manual recording
 ```
 
 - **`make e2e`** is the gate: exit code 0 means the whole pipeline is healthy. Run it after any change to the recorder, player, differ, storage, or API.
-- **`make e2e-keep`** runs the identical flow but, instead of tearing down, also boots the dashboard and blocks — printing the URLs so you can poke around a project that already has the recorded session and all three test runs (baseline / pass / fail) in it. **Ctrl+C** is the teardown trigger; it stops every process and removes the temp data dir.
+- **`make e2e-keep`** runs the identical flow but, instead of tearing down, also boots the dashboard and blocks — printing the URLs so you can poke around a project that already has the recorded session and all its test runs in it. Both fixtures stay up (primary on :3003, preview on :3004), so you can open the **Replay** dialog and enter `http://localhost:3004` to drive a cross-origin replay by hand. **Ctrl+C** is the teardown trigger; it stops every process and removes the temp data dir.
 - **`make fixture`** runs just the page server for manual recording. Pass `TAKA_PROJECT_ID=<id>` to attribute recordings to a project (create it first via `POST /api/projects` or the dashboard).
 
 ## Why it's deterministic
@@ -120,6 +121,17 @@ The crux of the regression test: the player (`@taka/player`) only mocks **record
 | Replay 3 | regression | output panel is red → diff > threshold → **failed** |
 
 The player sets `window.__taka_replay = true` via `evaluateOnNewDocument` before page scripts run, so the recorder stays dormant during replay while the page's own click handler still fires (producing the visible result that gets screenshotted).
+
+### Cross-origin replay
+
+After the scenario loop, the orchestrator validates the player's [`targetOrigin`](../../lib/player/README.md#replaying-against-a-different-origin) rebasing. A second fixture instance (same `server.mjs`) runs on **:3004** as a stand-in preview deployment. The harness reuses the click session — **recorded on :3003**, with its baseline captured there — and replays it against :3004:
+
+| Step | Preview (:3004) mode | Expected |
+|------|----------------------|----------|
+| replay with `targetOrigin=http://localhost:3004` | stable | **passes** — rebased nav landed on :3004 and its render matches the :3003 baseline; the `TestResult` records `targetOrigin` |
+| replay again | regression | **fails** — the preview's panel is red → diff clears the threshold |
+
+If rebasing were broken the stable replay would error or mismatch, so a green run is strong evidence the feature works against real preview URLs.
 
 ### Process model & teardown
 
