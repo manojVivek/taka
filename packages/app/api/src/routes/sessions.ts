@@ -13,7 +13,7 @@ router.post('/', async (req, res) => {
   try {
     const sessionData: SessionData = req.body;
 
-    if (!sessionData.id || !sessionData.url || !sessionData.events) {
+    if (!sessionData || !sessionData.id || !sessionData.url || !sessionData.events) {
       return res.status(400).json({
         error: 'Invalid session data',
         message: 'Missing required fields: id, url, events',

@@ -11,7 +11,7 @@ import { STORAGE_PATHS } from '@taka/constants';
 import { createStorage, type Storage, type StorageKind } from '@taka/storage';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 9001;
 
 const storageKind = (process.env.TAKA_STORAGE as StorageKind) || 'file';
 const storage: Storage = createStorage(storageKind, {
@@ -25,7 +25,13 @@ const testService = new TestService(sessionService, storage);
 
 app.use(helmet());
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+// Parse JSON bodies. Also accept `text/plain`, because the recorder's
+// unload-time flush uses `navigator.sendBeacon(url, JSON.stringify(...))`,
+// which the browser sends as `text/plain;charset=UTF-8` (a CORS-safelisted
+// content type — chosen to avoid a preflight that's unreliable during unload).
+// Without this, beacon uploads arrive with an unparsed body → `req.body`
+// undefined → session save crashes.
+app.use(express.json({ limit: '50mb', type: ['application/json', 'text/plain'] }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 app.use((req, _res, next) => {

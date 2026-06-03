@@ -30,7 +30,11 @@ export class SessionUploader {
   }
 
   uploadSync(sessionData: SessionData): void {
-    // Use sendBeacon for synchronous upload during page unload
+    // Use sendBeacon for a reliable upload during page unload. Passing a string
+    // makes the browser send it as `text/plain;charset=UTF-8` — a CORS-safelisted
+    // content type, so the beacon avoids a preflight (which is unreliable during
+    // unload). The API is configured to parse `text/plain` bodies as JSON; do NOT
+    // switch this to an `application/json` Blob or it will trigger that preflight.
     if ('sendBeacon' in navigator) {
       const success = navigator.sendBeacon(this.uploadUrl, JSON.stringify(sessionData));
 
