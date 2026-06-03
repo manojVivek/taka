@@ -5,7 +5,7 @@ import type { RecorderConfig } from '@taka/types';
 // dependencies. `projectId` is intentionally absent — it is required and
 // must be supplied by the caller.
 export const DEFAULT_CONFIG: Omit<RecorderConfig, 'projectId'> = {
-  apiEndpoint: 'http://localhost:3000/api',
+  apiEndpoint: 'http://localhost:9000/api',
   uploadInterval: 5000,
   maxBatchSize: 100,
   enableNetworkCapture: true,

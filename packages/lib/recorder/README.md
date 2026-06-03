@@ -36,7 +36,7 @@ This package is part of the workspace and is installed automatically via PNPM. T
 import { TakaRecorder } from '@taka/recorder';
 
 const recorder = TakaRecorder.init({
-  apiEndpoint: 'http://localhost:3001/api',
+  apiEndpoint: 'http://localhost:9001/api',
   projectId: 'notes-app',   // ← scopes every upload to this project
   uploadInterval: 5000,
   maxBatchSize: 50,
@@ -72,7 +72,7 @@ Initializes and auto-starts the recorder unless `autoStart: false` is passed.
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `apiEndpoint` | `http://localhost:3000/api` | Base API URL (no trailing slash) |
+| `apiEndpoint` | `http://localhost:9000/api` | Base API URL (no trailing slash) |
 | `projectId` | — (required) | Project on the API server to attribute sessions to; init throws if omitted |
 | `uploadInterval` | `5000` | Periodic flush cadence (ms) |
 | `maxBatchSize` | `100` | Force-flush threshold; also the buffer overflow cap |
@@ -127,7 +127,7 @@ test fixture serves at `/recorder.js`:
 <script>
   if (!window.__taka_replay) {
     window.__takaRecorder = window.TakaRecorder.init({
-      apiEndpoint: 'http://localhost:3001/api',
+      apiEndpoint: 'http://localhost:9001/api',
       projectId: 'prj_...',
     });
   }

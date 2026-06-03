@@ -8,7 +8,7 @@ install:
 build:
 	pnpm build
 
-# Start dev servers (API on 3001, Web on 3000)
+# Start dev servers (API on 9001, Web on 9000)
 dev:
 	pnpm exec turbo dev --concurrency 20
 
@@ -19,12 +19,14 @@ start:
 
 # Kill processes on dev ports
 kill:
-	-lsof -ti:3000 | xargs kill -9 2>/dev/null
-	-lsof -ti:3001 | xargs kill -9 2>/dev/null
-	-lsof -ti:3003 | xargs kill -9 2>/dev/null
-	@echo "Ports 3000, 3001, and 3003 cleared"
+	-lsof -ti:9000 | xargs kill -9 2>/dev/null
+	-lsof -ti:9001 | xargs kill -9 2>/dev/null
+	-lsof -ti:9002 | xargs kill -9 2>/dev/null
+	-lsof -ti:9003 | xargs kill -9 2>/dev/null
+	-lsof -ti:9004 | xargs kill -9 2>/dev/null
+	@echo "Ports 9000–9004 cleared"
 
-# Run the test fixture standalone on :3003 for manual recording.
+# Run the test fixture standalone on :9002 for manual recording.
 # Pass TAKA_PROJECT_ID to attribute recordings to a project.
 fixture:
 	TAKA_PROJECT_ID=$(or $(TAKA_PROJECT_ID),) node packages/app/test-fixture/server.mjs
@@ -100,4 +102,4 @@ typecheck:
 
 # Health check
 health:
-	@curl -s http://localhost:3001/api/health | python3 -m json.tool 2>/dev/null || echo "API not running"
+	@curl -s http://localhost:9001/api/health | python3 -m json.tool 2>/dev/null || echo "API not running"

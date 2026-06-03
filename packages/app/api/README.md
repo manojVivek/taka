@@ -10,7 +10,7 @@ Every session and test belongs to a project. Projects are a data-partitioning co
 
 Storage is chosen at boot via the `TAKA_STORAGE` env var (`file` for the default filesystem layout, `logOnly` for a debug backend that just logs every call). New backends drop in by implementing the `@taka/storage` interface.
 
-Runs on **http://localhost:3001** by default.
+Runs on **http://localhost:9001** by default.
 
 ## Tech Stack
 
@@ -24,7 +24,7 @@ Runs on **http://localhost:3001** by default.
 
 | Env var | Default | Effect |
 |---------|---------|--------|
-| `PORT` | `3001` | HTTP listen port |
+| `PORT` | `9001` | HTTP listen port |
 | `TAKA_STORAGE` | `file` | Storage backend: `file` (filesystem under `./data/`) or `logOnly` (debug — logs every call, persists nothing) |
 | `CHROME_PATH` | `/Applications/Google Chrome.app/...` | Override Chrome binary used by Puppeteer |
 | `NODE_ENV` | — | When set to `development`, error responses include the underlying message |
@@ -73,7 +73,7 @@ Both replay entry points accept an optional **`targetOrigin`** so a recorded ses
 - `POST /sessions/:id/replay` — top-level body field: `{ "targetOrigin": "https://preview-xyz.vercel.app" }`
 - `POST /tests/run` — inside `options`: `{ "sessionData": …, "options": { "targetOrigin": "…" } }`
 
-The value is **normalized + validated** server-side (`src/utils/origin.ts`): a bare host (`preview.example.com`, `localhost:3004`) gets a scheme assumed (`http://` for loopback hosts, `https://` otherwise), full URLs are reduced to their origin (path/query dropped), and anything non-http(s) or unparseable is rejected with **400**. Absent/empty → replay on the recorded origin (unchanged behavior). The player rebases same-origin URLs onto the target and leaves cross-origin URLs as recorded (see the [player README](../../lib/player/README.md#replaying-against-a-different-origin)); the resulting `TestResult` carries `targetOrigin` and `sourceOrigin` for display.
+The value is **normalized + validated** server-side (`src/utils/origin.ts`): a bare host (`preview.example.com`, `localhost:9003`) gets a scheme assumed (`http://` for loopback hosts, `https://` otherwise), full URLs are reduced to their origin (path/query dropped), and anything non-http(s) or unparseable is rejected with **400**. Absent/empty → replay on the recorded origin (unchanged behavior). The player rebases same-origin URLs onto the target and leaves cross-origin URLs as recorded (see the [player README](../../lib/player/README.md#replaying-against-a-different-origin)); the resulting `TestResult` carries `targetOrigin` and `sourceOrigin` for display.
 
 > **Known limitation:** restored auth cookies are re-scoped to the target hostname (domain + path) but their `secure`/`sameSite` attributes are not re-derived. Auth-gated HTTPS previews that require `Secure`/`SameSite=None` cookies may not authenticate correctly yet.
 
@@ -143,5 +143,5 @@ Or from the repo root: `make dev` (starts API + web together).
 ```bash
 make health
 # or
-curl -s http://localhost:3001/api/health | jq
+curl -s http://localhost:9001/api/health | jq
 ```

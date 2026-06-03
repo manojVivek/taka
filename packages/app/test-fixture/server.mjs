@@ -18,9 +18,9 @@ import { scenarios, scenarioById } from './scenarios.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const PORT = Number(process.env.FIXTURE_PORT || 3003);
+const PORT = Number(process.env.FIXTURE_PORT || 9002);
 const PROJECT_ID = process.env.TAKA_PROJECT_ID || '';
-const API_ENDPOINT = process.env.TAKA_API_ENDPOINT || 'http://localhost:3001/api';
+const API_ENDPOINT = process.env.TAKA_API_ENDPOINT || 'http://localhost:9001/api';
 
 // Path to the recorder's standalone IIFE bundle (built by `rollup -c`).
 const RECORDER_BUNDLE = join(

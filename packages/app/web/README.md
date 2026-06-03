@@ -4,9 +4,9 @@ Next.js dashboard for browsing recorded sessions, running replay tests, and revi
 
 ## Overview
 
-The web app is the human-facing UI for the platform. It talks to the API at `http://localhost:3001/api` and provides views for session management, test execution, and visual diff inspection.
+The web app is the human-facing UI for the platform. It talks to the API at `http://localhost:9001/api` and provides views for session management, test execution, and visual diff inspection.
 
-Runs on **http://localhost:3000** by default.
+Runs on **http://localhost:9000** by default.
 
 ## Tech Stack
 
@@ -65,4 +65,4 @@ Or from the repo root: `make dev` (starts web + API together).
 
 ## Configuration
 
-The dashboard expects the API at `http://localhost:3001/api`. To change this, update the fetch helpers under `src/lib/api/`.
+The dashboard expects the API at `http://localhost:9001/api`. To change this, update the fetch helpers under `src/lib/api/`.

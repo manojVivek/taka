@@ -89,7 +89,7 @@ export function Sidebar() {
         <div className="tk-status-row">
           <span className="pulse-dot" />
           <span>api connected</span>
-          <span style={{ marginLeft: 'auto', color: 'var(--dim)', fontSize: 11 }}>:3001</span>
+          <span style={{ marginLeft: 'auto', color: 'var(--dim)', fontSize: 11 }}>:9001</span>
         </div>
         <div className="tk-status-row" style={{ color: 'var(--dim)', fontSize: 11 }}>
           <span>{project.id.slice(0, 12)}</span>

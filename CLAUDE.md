@@ -91,14 +91,14 @@ services:
    - Storage API monitoring
 
 2. **Local Data Transmission**
-   - Direct POST to local API (http://localhost:3001)
+   - Direct POST to local API (http://localhost:9001)
    - Batch uploads to reduce requests
    - Local buffer for offline recording
 
 3. **SDK Interface**
    ```typescript
    TakaRecorder.init({
-     apiEndpoint: 'http://localhost:3001',
+     apiEndpoint: 'http://localhost:9001',
      uploadInterval: 5000,
      maxBatchSize: 100,
      localStorage: true  // Use localStorage for buffering
@@ -245,9 +245,9 @@ services:
    ```
 
 2. **Single Service Architecture**
-   - Web + API in one Next.js app: http://localhost:3000
-   - API routes: http://localhost:3000/api/*
-   - Static assets: http://localhost:3000/*
+   - Web + API in one Next.js app: http://localhost:9000
+   - API routes: http://localhost:9000/api/*
+   - Static assets: http://localhost:9000/*
 
 3. **Data Persistence**
    - SQLite DB: ./data/db.sqlite
@@ -295,7 +295,7 @@ services:
 NODE_ENV=development
 DATABASE_URL=sqlite:./data/db.sqlite
 STORAGE_PATH=./data
-PORT=3000
+PORT=9000
 ```
 
 ## Migration Path
@@ -362,13 +362,13 @@ This ultra-simplified architecture removes Redis entirely and uses in-memory/fil
 ### Use the Makefile for repeated commands
 Always use `make` targets instead of running raw commands. The project Makefile has targets for all common operations:
 
-- `make dev` — Start dev servers (API 3001, Web 3000)
+- `make dev` — Start dev servers (API 9001, Web 9000)
 - `make build` — Build all packages (incl. the recorder browser bundle)
 - `make e2e` — Hermetic end-to-end test (record → baseline → pass → regression-fail)
 - `make e2e-headful` — Same, with a visible browser for debugging
-- `make e2e-keep` — Run the flow, then leave API + fixture + dashboard up to explore (Ctrl+C tears down)
-- `make fixture` — Run the test fixture standalone on :3003 for manual recording
-- `make kill` — Kill all dev server ports (3000, 3001, 3003)
+- `make e2e-keep` — Run the flow, then leave API + fixtures + a manual recorder app (:9004) + dashboard up to explore (Ctrl+C tears down)
+- `make fixture` — Run the test fixture standalone on :9002 for manual recording
+- `make kill` — Kill all dev/e2e ports (9000–9004)
 - `make health` — Check API health
 - `make clean` — Clean build artifacts
 - `make reset` — Reset data directory

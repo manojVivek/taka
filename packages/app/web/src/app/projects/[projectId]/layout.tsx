@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import type { Project } from '@taka/types';
 
-const API_BASE_SSR = process.env.TAKA_API_URL || 'http://localhost:3001/api';
+const API_BASE_SSR = process.env.TAKA_API_URL || 'http://localhost:9001/api';
 
 async function fetchProject(id: string): Promise<Project | null> {
   try {

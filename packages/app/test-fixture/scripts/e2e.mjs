@@ -29,16 +29,22 @@ import { scenarios } from '../scenarios.mjs';
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..', '..', '..');
 
-const API_PORT = 3001;
-const FIXTURE_PORT = 3003;
+const API_PORT = 9001;
+const FIXTURE_PORT = 9002;
 // A second fixture instance on another port stands in for a Vercel-style
 // "preview" deployment — the target a recorded session is replayed against to
 // validate it cross-origin. Same server code as the primary fixture.
-const PREVIEW_PORT = 3004;
-const WEB_PORT = 3000;
+const PREVIEW_PORT = 9003;
+// A dedicated recorder-mode fixture, started only in keep mode (E2E_KEEP), as a
+// manual sandbox: open it in a browser and interact to capture fresh sessions
+// into the project — kept separate from the two fixtures above, whose modes the
+// automated run toggles.
+const RECORD_PORT = 9004;
+const WEB_PORT = 9000;
 const API_BASE = `http://localhost:${API_PORT}/api`;
 const FIXTURE_URL = `http://localhost:${FIXTURE_PORT}`;
 const PREVIEW_URL = `http://localhost:${PREVIEW_PORT}`;
+const RECORD_URL = `http://localhost:${RECORD_PORT}`;
 const WEB_URL = `http://localhost:${WEB_PORT}`;
 const PROJECT_ID = 'e2e';
 const CHROME_PATH =
@@ -266,21 +272,21 @@ async function runScenario(browser, scenario) {
 
 // ---- cross-origin (preview-environment) validation ------------------------
 // Record-on-A / replay-on-B: prove a session recorded on the primary fixture
-// (:3003) can be replayed against a *different* origin — the "preview" (:3004) —
+// (:9002) can be replayed against a *different* origin — the "preview" (:9003) —
 // via `targetOrigin`, diffing against the baseline captured on the original
 // origin. Both ports run the same fixture code, so B-stable matches A's
 // baseline (pass), while flipping B to regression yields a failing diff. This
 // reuses the click session recorded in the scenario loop (its baseline was
 // established on A), so it must run after the loop.
 async function crossOriginCheck() {
-  step('Cross-origin replay — recorded on :3003, replayed against :3004 (preview)');
+  step('Cross-origin replay — recorded on :9002, replayed against :9003 (preview)');
 
   const { body: list } = await fetchJson(`${API_BASE}/projects/${PROJECT_ID}/sessions?limit=50`);
   const summary = (list?.sessions || []).find(s => s.url && s.url.endsWith('/click'));
   if (
     !assert(
       !!summary,
-      'found the recorded click session to reuse (baseline captured on :3003)',
+      'found the recorded click session to reuse (baseline captured on :9002)',
       (list?.sessions || []).map(s => s.url),
     )
   ) {
@@ -329,6 +335,30 @@ async function keepAlive() {
     /* fixture may be down; ignore */
   }
 
+  // Start a dedicated recorder-mode app for manual play. Same scenarios, its own
+  // origin, recording into the same project — so sessions you capture by hand
+  // show up in the dashboard below, ready to replay/test. (The two automated
+  // fixtures are also still up but their modes get toggled by the run.)
+  step('Keep-alive — starting manual recorder app');
+  spawnProc('record', 'node', ['packages/app/test-fixture/server.mjs'], {
+    FIXTURE_PORT: String(RECORD_PORT),
+    TAKA_PROJECT_ID: PROJECT_ID,
+    TAKA_API_ENDPOINT: API_BASE,
+  });
+  try {
+    await waitFor(
+      'manual recorder',
+      async () => {
+        const { status } = await fetchJson(`${RECORD_URL}/health`);
+        return status === 200;
+      },
+      { timeout: 15_000, interval: 500 },
+    );
+    ok('manual recorder ready');
+  } catch {
+    fail('manual recorder did not come up (continuing — the other servers are usable)');
+  }
+
   // Boot the dashboard (prebuilt by `make e2e`) so there's a real UI to play in.
   step('Keep-alive — starting web dashboard');
   spawnProc('web', 'pnpm', ['--filter', '@taka/web', 'start'], { PORT: String(WEB_PORT) });
@@ -343,7 +373,7 @@ async function keepAlive() {
     );
     ok('dashboard ready');
   } catch {
-    fail('dashboard did not come up (continuing — API + fixture are still usable)');
+    fail('dashboard did not come up (continuing — API + fixtures are still usable)');
   }
 
   console.log(`
@@ -351,11 +381,15 @@ async function keepAlive() {
 \x1b[32m  servers are up — play around, then press Ctrl+C to tear down\x1b[0m
 \x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m
   dashboard   ${WEB_URL}/projects/${PROJECT_ID}
-  fixture     ${FIXTURE_URL}   (scenarios: ${scenarios.map(s => '/' + s.id).join(', ')})
-  preview     ${PREVIEW_URL}   (cross-origin replay target — try it in the Replay dialog)
+  \x1b[32mrecord →\x1b[0m    ${RECORD_URL}   ← open ${scenarios.map(s => '/' + s.id).join(' or ')} and interact to capture a NEW session
+  fixture     ${FIXTURE_URL}   (the automated run's record source — its sessions are pre-loaded above)
+  preview     ${PREVIEW_URL}   (cross-origin replay target — enter it in the Replay dialog)
   api         ${API_BASE}
-  project     ${PROJECT_ID}   (one recorded session + 3 test runs per scenario)
+  project     ${PROJECT_ID}   (pre-loaded: one recorded session + test runs per scenario)
   data dir    ${dataDir}   (temp — removed on teardown)
+
+  Manual flow: open the \x1b[32mrecord\x1b[0m URL → click/type → switch to the dashboard →
+  the new session appears under sessions → hit Replay (optionally target ${PREVIEW_URL}).
 
   Ctrl+C to stop everything and clean up.
 `);

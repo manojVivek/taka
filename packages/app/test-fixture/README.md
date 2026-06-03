@@ -5,9 +5,9 @@ A minimal, deterministic recording target plus a hermetic end-to-end test for th
 ## What it is
 
 - **`scenarios.mjs`** — the scenario registry. Each entry is one validation case (markup + behavior + optional regression variant) served at its own path. Adding coverage = adding a scenario here. See the [coverage checklist](#coverage-checklist) for what's covered and what's planned.
-- **`server.mjs`** — a tiny Express server (port **3003**) that renders one page per scenario at `/<id>` (e.g. `/click`), an index at `/`, and serves the recorder's standalone IIFE bundle at `/recorder.js`.
+- **`server.mjs`** — a tiny Express server (port **9002**) that renders one page per scenario at `/<id>` (e.g. `/click`), an index at `/`, and serves the recorder's standalone IIFE bundle at `/recorder.js`.
 - **A server-side "regression mode"** — `POST /__mode {"mode":"regression"}` flips an in-memory flag so a scenario applies its regression CSS (e.g. the click panel turns red). Same elements, same dimensions — only styling changes, producing a large, unambiguous pixel diff when the same recorded session is replayed.
-- **`scripts/e2e.mjs`** — a self-contained orchestrator that spawns its own API + fixture + Chrome, records a scenario interaction, and asserts the full pipeline. It also starts a **second fixture on :3004** (a stand-in "preview" deployment) and runs a [cross-origin replay](#cross-origin-replay) check.
+- **`scripts/e2e.mjs`** — a self-contained orchestrator that spawns its own API + fixture + Chrome, records a scenario interaction, and asserts the full pipeline. It also starts a **second fixture on :9003** (a stand-in "preview" deployment) and runs a [cross-origin replay](#cross-origin-replay) check.
 
 Each scenario lives on its own page so cases stay isolated and easy to manage — a flaky or in-progress scenario never blocks the others.
 
@@ -31,19 +31,21 @@ Tracks which recorder events / use-cases have a fixture scenario wired through t
 | ⬜ | Network capture + mock | `/network` | fetch / XHR | – | – | – |
 | ⬜ | Storage snapshot / auth restore | `/storage` | storage | – | – | n/a |
 | ⬜ | DOM mutation (observed) | via `/click` & others | `mutation` | – | n/a | n/a |
-| ✅ | Cross-origin replay (preview) | record `/click` on :3003, replay on :3004 | `targetOrigin` | n/a | ✓ | ✓ |
+| ✅ | Cross-origin replay (preview) | record `/click` on :9002, replay on :9003 | `targetOrigin` | n/a | ✓ | ✓ |
 
 ## Usage
 
 ```bash
 make e2e           # full hermetic test (build + record + replays + cross-origin + asserts), tears down
 make e2e-headful   # same, with a visible browser (E2E_HEADFUL=1)
-make e2e-keep      # run the flow, then leave API + both fixtures + dashboard up to explore
-make fixture       # run the fixture standalone on :3003 for manual recording
+make e2e-keep      # run the flow, then leave API + fixtures + a manual recorder + dashboard up to explore
+make fixture       # run the fixture standalone on :9002 for manual recording
 ```
 
 - **`make e2e`** is the gate: exit code 0 means the whole pipeline is healthy. Run it after any change to the recorder, player, differ, storage, or API.
-- **`make e2e-keep`** runs the identical flow but, instead of tearing down, also boots the dashboard and blocks — printing the URLs so you can poke around a project that already has the recorded session and all its test runs in it. Both fixtures stay up (primary on :3003, preview on :3004), so you can open the **Replay** dialog and enter `http://localhost:3004` to drive a cross-origin replay by hand. **Ctrl+C** is the teardown trigger; it stops every process and removes the temp data dir.
+- **`make e2e-keep`** runs the identical flow but, instead of tearing down, boots the dashboard and a **dedicated recorder app on :9004**, then blocks — printing the URLs so you can poke around a project that already has the automated session + test runs in it. To **create your own** sessions by hand: open the recorder app (`http://localhost:9004/click` or `/input`), click/type, then switch to the dashboard — the new session appears under sessions, ready to **Replay** (optionally targeting the preview on :9003 in the Replay dialog). The two automated fixtures (primary :9002, preview :9003) also stay up. **Ctrl+C** is the teardown trigger; it stops every process and removes the temp data dir.
+
+  > The recorder app on :9004 records into the same `e2e` project, but on its own origin (so its sessions stay distinct from the automated fixtures, whose stable/regression mode the run toggles). It starts in `stable` mode.
 - **`make fixture`** runs just the page server for manual recording. Pass `TAKA_PROJECT_ID=<id>` to attribute recordings to a project (create it first via `POST /api/projects` or the dashboard).
 
 ## Why it's deterministic
@@ -72,8 +74,8 @@ So two replays of the unchanged page are byte-identical (0% diff → pass), and 
    │        │
    ▼        ▼
 ┌──────┐  ┌──────────────────┐       record            ┌──────────────────────┐
-│ API  │  │ fixture :3003    │◀─ Chrome drives the ─────│ puppeteer-core (host  │
-│ :3001│  │  GET /  (index)  │   scenario interaction    │ Chrome), recorder on  │
+│ API  │  │ fixture :9002    │◀─ Chrome drives the ─────│ puppeteer-core (host  │
+│ :9001│  │  GET /  (index)  │   scenario interaction    │ Chrome), recorder on  │
 │      │  │  GET /<scenario> │── recorder uploads ──────▶│ the page → POST       │
 │      │  │  GET /recorder.js │   session to API          │ /projects/e2e/sessions│
 │      │  │  POST /__mode     │                          └──────────────────────┘
@@ -87,7 +89,7 @@ So two replays of the unchanged page are byte-identical (0% diff → pass), and 
 │      │   └───────────────────────────────────────────────┘
 └──────┘
    ▲
-   │ (in keep mode) the web dashboard :3000 is also booted, proxying /api → :3001
+   │ (in keep mode) the web dashboard :9000 is also booted, proxying /api → :9001
 ```
 
 ### The recording path
@@ -99,7 +101,7 @@ The fixture page loads the recorder as a plain script: `<script src="/recorder.j
 <script>
   if (!window.__taka_replay) {
     window.__takaRecorder = window.TakaRecorder.init({
-      apiEndpoint: 'http://localhost:3001/api',
+      apiEndpoint: 'http://localhost:9001/api',
       projectId: 'e2e',        // injected server-side from TAKA_PROJECT_ID
       uploadInterval: 1500,
     });
@@ -124,11 +126,11 @@ The player sets `window.__taka_replay = true` via `evaluateOnNewDocument` before
 
 ### Cross-origin replay
 
-After the scenario loop, the orchestrator validates the player's [`targetOrigin`](../../lib/player/README.md#replaying-against-a-different-origin) rebasing. A second fixture instance (same `server.mjs`) runs on **:3004** as a stand-in preview deployment. The harness reuses the click session — **recorded on :3003**, with its baseline captured there — and replays it against :3004:
+After the scenario loop, the orchestrator validates the player's [`targetOrigin`](../../lib/player/README.md#replaying-against-a-different-origin) rebasing. A second fixture instance (same `server.mjs`) runs on **:9003** as a stand-in preview deployment. The harness reuses the click session — **recorded on :9002**, with its baseline captured there — and replays it against :9003:
 
-| Step | Preview (:3004) mode | Expected |
+| Step | Preview (:9003) mode | Expected |
 |------|----------------------|----------|
-| replay with `targetOrigin=http://localhost:3004` | stable | **passes** — rebased nav landed on :3004 and its render matches the :3003 baseline; the `TestResult` records `targetOrigin` |
+| replay with `targetOrigin=http://localhost:9003` | stable | **passes** — rebased nav landed on :9003 and its render matches the :9002 baseline; the `TestResult` records `targetOrigin` |
 | replay again | regression | **fails** — the preview's panel is red → diff clears the threshold |
 
 If rebasing were broken the stable replay would error or mismatch, so a green run is strong evidence the feature works against real preview URLs.
@@ -158,9 +160,9 @@ Each run uses a fresh `mkdtemp` `DATA_ROOT`, so runs don't pollute the repo `./d
 
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `FIXTURE_PORT` | `3003` | Fixture server port |
+| `FIXTURE_PORT` | `9002` | Fixture server port |
 | `TAKA_PROJECT_ID` | (unset) | Project the recorder attributes sessions to |
-| `TAKA_API_ENDPOINT` | `http://localhost:3001/api` | API the recorder uploads to |
+| `TAKA_API_ENDPOINT` | `http://localhost:9001/api` | API the recorder uploads to |
 | `CHROME_PATH` | macOS Google Chrome | Chrome binary for the orchestrator's Puppeteer (e2e) |
 | `E2E_HEADFUL` | (unset) | Set to `1` to launch a visible browser in the orchestrator |
 | `E2E_KEEP` | (unset) | Set to `1` to leave servers up after the flow (Ctrl+C to tear down) |

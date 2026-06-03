@@ -38,7 +38,7 @@ export default function GettingStartedPage() {
 <script>
   window.addEventListener('load', () => {
     TakaRecorder.init({
-      apiEndpoint: 'http://localhost:3001/api',
+      apiEndpoint: 'http://localhost:9001/api',
       projectId: '${project.id}',
       uploadInterval: 5000,
       enableNetworkCapture: true,
@@ -127,7 +127,7 @@ export default function GettingStartedPage() {
               {'\n'}
               <span className="gutter">5 </span>    <span className="tk-fn">TakaRecorder</span>.<span className="tk-fn">init</span>({'{'}
               {'\n'}
-              <span className="gutter">6 </span>      <span className="tk-attr">apiEndpoint</span>: {'\''}<span className="tk-str">http://localhost:3001/api</span>{'\''},
+              <span className="gutter">6 </span>      <span className="tk-attr">apiEndpoint</span>: {'\''}<span className="tk-str">http://localhost:9001/api</span>{'\''},
               {'\n'}
               <span className="gutter">7 </span>      <span className="tk-attr">projectId</span>: {'\''}<span className="tk-str">{project.id}</span>{'\''},
               {'\n'}
@@ -272,7 +272,7 @@ function StepCell({
 
 const CONFIG_ROWS: [string, string, string, string][] = [
   ['projectId', 'string', 'required', "this project's id. The recorder throws at init if missing or empty."],
-  ['apiEndpoint', 'string', 'http://localhost:3001/api', 'where the recorder ships sessions.'],
+  ['apiEndpoint', 'string', 'http://localhost:9001/api', 'where the recorder ships sessions.'],
   ['uploadInterval', 'number', '5000', 'ms between batched uploads. lower = fresher, higher = less network.'],
   ['maxBatchSize', 'number', '100', 'max events per upload. forces flush when reached.'],
   ['enableNetworkCapture', 'boolean', 'true', 'record fetch + xhr for deterministic replay.'],

@@ -55,10 +55,10 @@ That starts:
 
 | Service | Port | URL |
 |---------|------|-----|
-| Web dashboard | 3000 | http://localhost:3000 |
-| API server | 3001 | http://localhost:3001 |
+| Web dashboard | 9000 | http://localhost:9000 |
+| API server | 9001 | http://localhost:9001 |
 
-Open http://localhost:3000 to see the dashboard. To generate a session, run the end-to-end flow (`make e2e`) or start the fixture standalone (`make fixture`) and click its button.
+Open http://localhost:9000 to see the dashboard. To generate a session, run the end-to-end flow (`make e2e`) or start the fixture standalone (`make fixture`) and click its button.
 
 ## Workflow
 
@@ -66,12 +66,12 @@ Open http://localhost:3000 to see the dashboard. To generate a session, run the 
 
 `make e2e` runs the whole pipeline hermetically: it spawns its own API + fixture + Chrome on a temp data dir, records a click, then asserts **record → baseline → unchanged-passes → regression-fails**, and tears everything down. Exit code 0 means the pipeline is healthy end to end.
 
-`make e2e-keep` runs the same flow but leaves the API + fixture + dashboard running afterward (with the recorded session and all three test runs already populated) so you can explore in the UI; Ctrl+C tears it down. See [`packages/app/test-fixture/README.md`](packages/app/test-fixture/README.md) for the full architecture.
+`make e2e-keep` runs the same flow but leaves everything running afterward — the API, both fixtures, the dashboard (pre-populated with the automated session + test runs), and a **dedicated recorder app on :9004** for creating your own sessions by hand (open it, interact, then Replay from the dashboard); Ctrl+C tears it down. See [`packages/app/test-fixture/README.md`](packages/app/test-fixture/README.md) for the full architecture.
 
 ### Manual
 
-1. **Record** — `make fixture` (serves the button page on :3003), open it, click. The recorder ships the session to the API.
-2. **Browse** — sessions appear at http://localhost:3000.
+1. **Record** — `make fixture` (serves the button page on :9002), open it, click. The recorder ships the session to the API.
+2. **Browse** — sessions appear at http://localhost:9000.
 3. **Replay** — click "Replay" on a session; the API uses `@taka/player` to re-run it in headless Chrome and capture screenshots.
 4. **Diff** — when a baseline exists, `@taka/differ` compares head vs baseline and reports pass/fail.
 5. **Review** — visual diffs show up under the project's tests.
@@ -87,9 +87,9 @@ The project ships a `Makefile` with common operations. Always prefer these over 
 | `make build` | Build all packages (incl. the recorder browser bundle) |
 | `make e2e` | Hermetic end-to-end test (record → baseline → pass → regression-fail) |
 | `make e2e-headful` | Same, with a visible browser for debugging |
-| `make e2e-keep` | Run the flow, then leave API + fixture + dashboard up to explore (Ctrl+C to tear down) |
-| `make fixture` | Run the test fixture standalone on :3003 for manual recording |
-| `make kill` | Kill ports 3000, 3001, 3003 |
+| `make e2e-keep` | Run the flow, then leave API + fixtures + a manual recorder (:9004) + dashboard up to explore (Ctrl+C to tear down) |
+| `make fixture` | Run the test fixture standalone on :9002 for manual recording |
+| `make kill` | Kill dev/e2e ports (9000–9004) |
 | `make health` | Check API health endpoint |
 | `make clean` | Remove `dist/`, `.next/`, and `.turbo/` |
 | `make reset` | Wipe `./data/` and recreate session directories |
@@ -159,7 +159,7 @@ Most of the platform is functional end-to-end. You can record a session, replay 
   - Minimal deterministic button page with the recorder wired in via a `<script>` tag
   - Server-side "regression mode" that flips the output to a red background for a guaranteed visual diff
   - Hermetic `make e2e` orchestrator: spawns API + fixture + Chrome, records, and asserts record → baseline → pass → regression-fail
-  - Cross-origin validation: a second fixture on :3004 stands in for a preview; the orchestrator replays the :3003-recorded session against it and asserts stable-pass / regression-fail
+  - Cross-origin validation: a second fixture on :9003 stands in for a preview; the orchestrator replays the :9002-recorded session against it and asserts stable-pass / regression-fail
 
 ### In progress / not yet built
 

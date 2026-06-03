@@ -19,8 +19,8 @@ function isLoopbackHost(host: string): boolean {
  *
  *   - Full URL (`https://preview.example.com/foo?x=1`) → its origin
  *     (`https://preview.example.com`); any path/query/hash is dropped.
- *   - Bare host (`preview.example.com`, `localhost:3004`) → a scheme is assumed:
- *     `http://` for loopback hosts (so `localhost:3004` matches a dev server),
+ *   - Bare host (`preview.example.com`, `localhost:9003`) → a scheme is assumed:
+ *     `http://` for loopback hosts (so `localhost:9003` matches a dev server),
  *     `https://` otherwise.
  *   - Non-http(s) schemes, hostless, or unparseable input → `{ ok: false }`.
  */
