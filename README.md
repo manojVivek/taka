@@ -148,7 +148,7 @@ Most of the platform is functional end-to-end. You can record a session, replay 
   - Projects landing (`/`) with grid of project cards, search, "new project" modal
   - Per-project dashboard (`/projects/[id]`) — stat tiles, recent sessions, live queue widget
   - Sessions list with search/sort/pagination
-  - Session detail with metadata strip, event-density sparkline, filtered event timeline, network panel
+  - Session detail with metadata strip, recorded-origin, baseline-frame flipstrip gallery (click/←→ to flip an inline preview), event-density sparkline, filtered event timeline, network panel
   - Replay-target dialog on every replay trigger (sessions list, session detail, dashboard) — prefilled with the recorded origin, accepts a preview URL; the session's recorded origin is surfaced in the session view and the test detail shows `target:` for cross-origin runs
   - Tests list with status filter, mini frame-strip per row, 2s polling
   - Test detail (the hero) — three-up Baseline/Head/Diff viewer with frame list, jump-to-failure, frame-strip filmstrip

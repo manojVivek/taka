@@ -2,19 +2,21 @@
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { SessionEvent } from '@taka/types';
 import { useProject } from '@/lib/projectContext';
 import { useApi } from '@/lib/hooks';
-import { api } from '@/lib/api';
+import { api, baselineScreenshotUrl, type BaselineScreenshot } from '@/lib/api';
 import { formatRelativeTime, formatDuration, getBrowserName, truncateId, originOf } from '@/lib/utils';
 import { Topbar } from '@/components/taka/Topbar';
 import { Panel, PanelHead } from '@/components/taka/Panel';
+import { Badge } from '@/components/taka/Badge';
 import { Button } from '@/components/taka/Button';
 import { Ico, type IconKey } from '@/components/taka/Icons';
 import { Spinner } from '@/components/taka/Spinner';
 import { ThemeToggle } from '@/components/taka/ThemeToggle';
 import { ReplayDialog } from '@/components/taka/ReplayDialog';
+import { MockShot } from '@/components/taka/MockShot';
 
 const EVENT_ICON: Record<string, IconKey> = {
   click: 'Click',
@@ -42,6 +44,11 @@ export default function SessionDetailPage() {
   const { data: session, loading, error } = useApi(() => api.getSession(project.id, sessionId), {
     deps: [project.id, sessionId],
   });
+
+  const { data: baselineData } = useApi(() => api.getBaselineScreenshots(project.id, sessionId), {
+    deps: [project.id, sessionId],
+  });
+  const baselineShots = baselineData?.screenshots ?? [];
 
   const events = session?.events ?? [];
   const networkRequests = session?.networkRequests ?? [];
@@ -168,6 +175,28 @@ export default function SessionDetailPage() {
               <MetaTile k="browser" v={getBrowserName(session.metadata.userAgent)} />
             </div>
           </div>
+        </Panel>
+
+        {/* Baseline frames — the screenshots promoted to baseline on first replay */}
+        <Panel className="mb-4">
+          <PanelHead
+            title="// baseline frames"
+            sub={
+              baselineShots.length
+                ? `${baselineShots.length} screenshot${baselineShots.length === 1 ? '' : 's'} · captured on first replay`
+                : 'no baseline yet'
+            }
+            right={
+              session.hasBaseline ? <Badge kind="baseline">baseline</Badge> : <Badge kind="pending">none</Badge>
+            }
+          />
+          {baselineShots.length === 0 ? (
+            <div className="text-dim p-8 text-center text-xs">
+              no baseline captured yet — replay this session to establish one.
+            </div>
+          ) : (
+            <BaselineGallery projectId={project.id} sessionId={sessionId} shots={baselineShots} />
+          )}
         </Panel>
 
         {/* Timeline */}
@@ -297,6 +326,131 @@ function MetaTile({ k, v }: { k: string; v: string }) {
     <div className="flex flex-col gap-1">
       <span className="text-dim text-[9.5px] uppercase tracking-[0.18em]">// {k}</span>
       <span className="text-fg text-[12.5px]">{v}</span>
+    </div>
+  );
+}
+
+// Flipstrip gallery for a session's baseline frames — mirrors the test detail's
+// frame strip: click a thumbnail (or use ← / →) to flip the large inline preview,
+// active frame marked with a lime border. No new tab; everything stays on-page.
+function BaselineGallery({
+  projectId,
+  sessionId,
+  shots,
+}: {
+  projectId: string;
+  sessionId: string;
+  shots: BaselineScreenshot[];
+}) {
+  const [active, setActive] = useState(0);
+  const idx = Math.min(active, shots.length - 1);
+
+  // Arrow-key navigation, like flipping through a media previewer.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (e.key === 'ArrowLeft') setActive(i => Math.max(0, Math.min(i, shots.length - 1) - 1));
+      else if (e.key === 'ArrowRight') setActive(i => Math.min(shots.length - 1, i + 1));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [shots.length]);
+
+  const activeShot = shots[idx];
+  const activeUrl = baselineScreenshotUrl(projectId, sessionId, activeShot.filename);
+
+  return (
+    <div className="flex flex-col gap-3.5 p-4">
+      {/* Large inline preview of the selected frame */}
+      <div className="tk-diff-stage">
+        <div className="tk-diff-toolbar">
+          <span className="text-dim">// frame</span>
+          <span className="text-fg">{String(idx + 1).padStart(2, '0')}</span>
+          <span className="text-dim">/ {shots.length}</span>
+          <span className="text-dim">·</span>
+          <span className="text-mid truncate">{activeShot.filename}</span>
+          <span className="text-dim">· event {activeShot.eventIndex}</span>
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-dim text-[11px]">
+              <span className="tk-kbd">←</span> / <span className="tk-kbd">→</span>
+            </span>
+            <a href={activeUrl} target="_blank" rel="noreferrer" className="tk-btn ghost sm no-underline">
+              <Ico.External className="ico" />
+              open original
+            </a>
+          </div>
+        </div>
+        <BaselinePreview key={activeShot.filename} url={activeUrl} />
+      </div>
+
+      {/* Thumbnail strip */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
+        {shots.map((s, i) => {
+          const isActive = i === idx;
+          const url = baselineScreenshotUrl(projectId, sessionId, s.filename);
+          return (
+            <button
+              key={s.filename}
+              onClick={() => setActive(i)}
+              title={`frame ${i + 1} · event ${s.eventIndex}`}
+              className={`bg-bg w-[84px] flex-shrink-0 cursor-pointer border-[1.5px] p-1 transition-colors ${
+                isActive ? 'border-lime' : 'border-border hover:border-mid'
+              }`}
+            >
+              <BaselineThumb url={url} />
+              <div className="mt-1.5 flex items-center justify-between px-0.5">
+                <span className="text-dim text-[10px]">{String(i + 1).padStart(2, '0')}</span>
+                <span
+                  className="h-1.5 w-1.5"
+                  style={{ background: isActive ? 'var(--lime)' : 'var(--border)' }}
+                />
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function BaselinePreview({ url }: { url: string }) {
+  const [errored, setErrored] = useState(false);
+  return (
+    <div className="bg-bg relative h-[460px] overflow-hidden">
+      <span className="text-dim absolute left-3.5 top-3 z-10 text-[9.5px] uppercase tracking-[0.18em]">
+        // baseline
+      </span>
+      {!errored ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt="baseline frame"
+          className="absolute inset-0 h-full w-full object-contain"
+          onError={() => setErrored(true)}
+        />
+      ) : (
+        <MockShot variant="base" />
+      )}
+    </div>
+  );
+}
+
+function BaselineThumb({ url }: { url: string }) {
+  const [errored, setErrored] = useState(false);
+  return (
+    <div className="bg-panel-2 relative h-12 overflow-hidden">
+      {!errored ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover object-top"
+          onError={() => setErrored(true)}
+        />
+      ) : (
+        <div className="bg-panel absolute inset-1" />
+      )}
     </div>
   );
 }

@@ -28,6 +28,18 @@ export interface SessionsListResponse {
   offset: number;
 }
 
+export interface BaselineScreenshot {
+  filename: string;
+  eventIndex: number;
+  size: number;
+  timestamp?: number;
+}
+
+export interface BaselineScreenshotsResponse {
+  screenshots: BaselineScreenshot[];
+  total: number;
+}
+
 export interface SessionStats {
   totalSessions: number;
   totalEvents: number;
@@ -133,6 +145,11 @@ export const api = {
   },
   getSession(projectId: string, id: string) {
     return request<SessionData>(`/projects/${projectId}/sessions/${id}`);
+  },
+  getBaselineScreenshots(projectId: string, id: string) {
+    return request<BaselineScreenshotsResponse>(
+      `/projects/${projectId}/sessions/${id}/screenshots`,
+    );
   },
   getSessionStats(projectId: string) {
     return request<SessionStats>(`/projects/${projectId}/sessions/stats`);

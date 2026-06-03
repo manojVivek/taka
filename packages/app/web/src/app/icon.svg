@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24">
+  <!-- Taka favicon — the TerminalMark logo symbol on a solid dark brand tile so
+       it stays legible on any browser-tab color. Sharp corners match the
+       terminal/devtool aesthetic. Regenerate favicon.ico via scripts/gen-favicon.mjs. -->
+  <rect width="24" height="24" fill="#0a0b0d"/>
+  <rect x="1" y="1" width="9" height="9" fill="#e8e8e6"/>
+  <rect x="14" y="1" width="9" height="9" fill="#e8e8e6"/>
+  <rect x="1" y="14" width="9" height="9" fill="#e8e8e6"/>
+  <rect x="14" y="14" width="9" height="9" fill="#b6ff5b"/>
+  <rect x="15.5" y="15.5" width="6" height="6" fill="#0a0b0d"/>
+</svg>

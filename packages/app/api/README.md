@@ -52,6 +52,7 @@ Every session, test, and blob endpoint lives under `/api/projects/:projectId/...
 | `GET` | `/api/projects/:projectId/sessions/stats` | Aggregate session statistics for the project |
 | `GET` | `/api/projects/:projectId/sessions/search?q=` | Full-text search by URL/title within the project |
 | `GET` | `/api/projects/:projectId/sessions/:id` | Get session details |
+| `GET` | `/api/projects/:projectId/sessions/:id/screenshots` | List baseline screenshots captured for this session (empty until baselined) |
 | `DELETE` | `/api/projects/:projectId/sessions/:id` | Delete a session and its assets |
 | `POST` | `/api/projects/:projectId/sessions/:id/replay` | Queue a replay-as-test for this session |
 

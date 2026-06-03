@@ -138,6 +138,31 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// GET /:id/screenshots — baseline screenshots captured for this session
+// (the frames promoted to baseline on its first replay). Empty until baselined.
+router.get('/:id/screenshots', async (req, res) => {
+  try {
+    const pid = projectId(req);
+    const session = await req.sessionService.getSession(pid, req.params.id);
+    if (!session) {
+      return res.status(404).json({
+        error: 'Session not found',
+        message: `Session with ID ${req.params.id} does not exist`,
+      });
+    }
+
+    const screenshots = await req.sessionService.listBaselineScreenshots(pid, req.params.id);
+    screenshots.sort((a, b) => a.eventIndex - b.eventIndex);
+    res.json({ screenshots, total: screenshots.length });
+  } catch (error) {
+    console.error('[Sessions API] Failed to list baseline screenshots:', error);
+    res.status(500).json({
+      error: 'Failed to retrieve screenshots',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // DELETE /:id
 router.delete('/:id', async (req, res) => {
   try {

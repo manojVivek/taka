@@ -23,7 +23,7 @@ Runs on **http://localhost:9000** by default.
 |-------|-------------|
 | `/` | Dashboard — session stats, recent sessions, test queue status |
 | `/sessions` | Paginated session list with search, sort, and inline actions (replay, view, delete) |
-| `/sessions/[id]` | Session detail — events, network requests, metadata |
+| `/sessions/[id]` | Session detail — baseline-frame flipstrip gallery, events, network requests, metadata |
 | `/tests` | Visual regression test results, filterable by status |
 | `/tests/[id]` | Test detail — baseline vs. head screenshots, diff images, pass/fail breakdown |
 | `/getting-started` | Onboarding guide with recorder setup snippets and config reference |
@@ -56,12 +56,17 @@ Runs on **http://localhost:9000** by default.
 ## Running locally
 
 ```bash
-pnpm dev    # Next.js dev server with Turbopack
-pnpm build  # Production build
-pnpm start  # Serve production build
+pnpm dev          # Next.js dev server with Turbopack
+pnpm build        # Production build
+pnpm start        # Serve production build
+pnpm gen:favicon  # Regenerate src/app/favicon.ico from src/app/icon.svg
 ```
 
 Or from the repo root: `make dev` (starts web + API together).
+
+### Favicon
+
+The favicon is the `TerminalMark` logo symbol on a dark brand tile. `src/app/icon.svg` is the source of truth (auto-served to modern browsers); `src/app/favicon.ico` (16/32/48, for legacy/Safari) is generated from it by `scripts/gen-favicon.mjs` via `pnpm gen:favicon`. Edit the SVG, then regenerate.
 
 ## Configuration
 
