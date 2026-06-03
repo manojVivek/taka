@@ -3,7 +3,8 @@
  * Hermetic end-to-end test for the full Taka pipeline.
  *
  * Spawns its own API (filesystem storage in a temp dir) and the fixture server,
- * drives a real Chrome to record a session, then proves the four core claims:
+ * then drives a real Chrome through every scenario in scenarios.mjs. For each
+ * scenario it proves the four core claims:
  *   1. events flow through to the API,
  *   2. the first replay establishes a baseline,
  *   3. replaying the unchanged page again PASSES,
@@ -14,6 +15,7 @@
  * Env:
  *   CHROME_PATH   override Chrome binary (defaults to macOS Google Chrome)
  *   E2E_HEADFUL   set to "1" to launch a visible browser for debugging
+ *   E2E_KEEP      set to "1" to leave servers up afterward (Ctrl+C to tear down)
  */
 
 import { spawn } from 'node:child_process';
@@ -22,6 +24,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
+import { scenarios } from '../scenarios.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..', '..', '..');
@@ -170,6 +173,92 @@ async function replayAndWait(sessionId, label) {
   return { testId, test, result };
 }
 
+async function setMode(mode) {
+  const { body } = await fetchJson(`${FIXTURE_URL}/__mode`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode }),
+  });
+  return body?.mode;
+}
+
+// Drive a scenario's interaction in a fresh page, flush, and return the
+// recorded session (disambiguated by URL so each scenario gets its own).
+async function recordScenario(browser, scenario) {
+  const page = await browser.newPage();
+  await page.setViewport({ width: 1280, height: 800 });
+  page.on('console', m => {
+    const t = m.text();
+    if (t.includes('[Fixture]') || t.includes('[Taka]')) console.log(`  \x1b[90m[page] ${t}\x1b[0m`);
+  });
+  try {
+    await page.goto(`${FIXTURE_URL}/${scenario.id}`, { waitUntil: 'networkidle2' });
+    await waitFor('recorder to attach', () => page.evaluate(() => !!window.__takaRecorder));
+    await scenario.e2e.record(page);
+    await sleep(500);
+    await page.evaluate(() => window.__takaRecorder.stop()); // synchronous flush
+    await sleep(500);
+  } finally {
+    await page.close();
+  }
+
+  return waitFor(`session for "${scenario.id}"`, async () => {
+    const { body } = await fetchJson(`${API_BASE}/projects/${PROJECT_ID}/sessions?limit=50`);
+    const summary = (body?.sessions || []).find(s => s.url && s.url.endsWith(`/${scenario.id}`));
+    if (!summary) return null;
+    const { body: full } = await fetchJson(
+      `${API_BASE}/projects/${PROJECT_ID}/sessions/${summary.id}`,
+    );
+    // Need at least the initial navigation + the interaction's event(s).
+    return full && full.events && full.events.length > 1 ? full : null;
+  });
+}
+
+// Run one scenario end to end: record → capture asserts → baseline → stable
+// pass → (optional) regression fail. Each scenario starts in stable mode.
+async function runScenario(browser, scenario) {
+  step(`Scenario "${scenario.id}" — ${scenario.title}`);
+  await setMode('stable');
+
+  const session = await recordScenario(browser, scenario);
+  ok(`recorded session ${session.id.slice(0, 8)} (${session.events.length} events)`);
+
+  for (const c of scenario.e2e.checks(session.events)) {
+    assert(c.pass, `[${scenario.id}] ${c.label}`, c.pass ? undefined : c.detail);
+  }
+
+  const r1 = await replayAndWait(session.id, `${scenario.id}#baseline`);
+  assert(r1.result?.isBaseline === true, `[${scenario.id}] first replay created a baseline`, {
+    status: r1.test.status,
+    isBaseline: r1.result?.isBaseline,
+  });
+
+  const r2 = await replayAndWait(session.id, `${scenario.id}#stable`);
+  const r2Failed = (r2.result?.diffs ?? []).filter(d => !d.passed);
+  assert(
+    r2.test.status === 'completed' && r2Failed.length === 0,
+    `[${scenario.id}] unchanged replay passes (no failing diffs)`,
+    { status: r2.test.status, failing: r2Failed.length },
+  );
+
+  const wantRegression = scenario.e2e.regression ?? scenario.hasRegression;
+  if (wantRegression) {
+    await setMode('regression');
+    const r3 = await replayAndWait(session.id, `${scenario.id}#regression`);
+    const r3Failed = (r3.result?.diffs ?? []).filter(d => !d.passed);
+    assert(
+      r3.test.status === 'failed' && r3Failed.length >= 1,
+      `[${scenario.id}] regression replay fails (≥1 failing diff)`,
+      { status: r3.test.status, failing: r3Failed.length },
+    );
+    if (r3Failed.length) {
+      const worst = Math.max(...r3Failed.map(d => d.percentageDifference));
+      ok(`[${scenario.id}] largest diff ${(worst * 100).toFixed(1)}% (threshold ${(r3Failed[0].threshold * 100).toFixed(0)}%)`);
+    }
+    await setMode('stable'); // leave clean for the next scenario
+  }
+}
+
 // ---- keep-alive (E2E_KEEP=1) ----------------------------------------------
 async function keepAlive() {
   // Reset the fixture to stable so the page renders normally when opened.
@@ -205,9 +294,9 @@ async function keepAlive() {
 \x1b[32m  servers are up — play around, then press Ctrl+C to tear down\x1b[0m
 \x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m
   dashboard   ${WEB_URL}/projects/${PROJECT_ID}
-  fixture     ${FIXTURE_URL}        (POST /__mode {"mode":"regression"|"stable"} to toggle)
+  fixture     ${FIXTURE_URL}   (scenarios: ${scenarios.map(s => '/' + s.id).join(', ')})
   api         ${API_BASE}
-  project     ${PROJECT_ID}   (1 recorded session, 3 test runs: baseline / pass / fail)
+  project     ${PROJECT_ID}   (one recorded session + 3 test runs per scenario)
   data dir    ${dataDir}   (temp — removed on teardown)
 
   Ctrl+C to stop everything and clean up.
@@ -264,87 +353,18 @@ async function main() {
   });
   ok('fixture is healthy');
 
-  step('Record a session (drive Chrome, click the button)');
   const browser = await puppeteer.launch({
     headless: HEADFUL ? false : 'new',
     executablePath: CHROME_PATH,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
   try {
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 800 });
-    page.on('console', m => {
-      const t = m.text();
-      if (t.includes('[Fixture]') || t.includes('[Taka]')) console.log(`  \x1b[90m[page] ${t}\x1b[0m`);
-    });
-    await page.goto(`${FIXTURE_URL}/click`, { waitUntil: 'networkidle2' });
-    await waitFor('recorder to attach', () => page.evaluate(() => !!window.__takaRecorder));
-    await page.click('#action-btn');
-    await sleep(500);
-    // Force a synchronous flush of the buffer, then give the upload a moment.
-    await page.evaluate(() => window.__takaRecorder.stop());
-    await sleep(500);
-    await page.close();
+    console.log(`\n  running ${scenarios.length} scenario(s): ${scenarios.map(s => s.id).join(', ')}`);
+    for (const scenario of scenarios) {
+      await runScenario(browser, scenario);
+    }
   } finally {
     await browser.close();
-  }
-  ok('recorded one click interaction');
-
-  step('Assert events flowed through to the API');
-  const session = await waitFor('session to arrive with a click event', async () => {
-    const { body } = await fetchJson(`${API_BASE}/projects/${PROJECT_ID}/sessions?limit=1`);
-    const s = body?.sessions?.[0];
-    if (!s) return null;
-    const { body: full } = await fetchJson(
-      `${API_BASE}/projects/${PROJECT_ID}/sessions/${s.id}`,
-    );
-    const hasClick = full?.events?.some(e => e.type === 'click');
-    return hasClick ? full : null;
-  });
-  const types = session.events.map(e => e.type);
-  assert(types.includes('navigation'), 'session has a navigation event', types);
-  const click = session.events.find(e => e.type === 'click');
-  assert(
-    click && typeof click.target === 'string' && click.target.includes('action-btn'),
-    'session has a click on #action-btn',
-    click,
-  );
-
-  step('Replay #1 — establishes baseline (stable mode)');
-  const r1 = await replayAndWait(session.id, 'replay#1');
-  assert(r1.result?.isBaseline === true, 'first replay created a baseline', {
-    status: r1.test.status,
-    isBaseline: r1.result?.isBaseline,
-  });
-
-  step('Replay #2 — unchanged page should PASS');
-  const r2 = await replayAndWait(session.id, 'replay#2');
-  const r2Failed = (r2.result?.diffs ?? []).filter(d => !d.passed);
-  assert(r2.test.status === 'completed', 'stable replay status is completed (passed)', {
-    status: r2.test.status,
-  });
-  assert(r2Failed.length === 0, 'stable replay has no failing diffs', {
-    diffs: (r2.result?.diffs ?? []).map(d => ({ idx: d.headScreenshot?.eventIndex, pct: d.percentageDifference, passed: d.passed })),
-  });
-
-  step('Flip fixture to regression mode');
-  const { body: flip } = await fetchJson(`${FIXTURE_URL}/__mode`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode: 'regression' }),
-  });
-  assert(flip?.mode === 'regression', 'fixture is now in regression mode');
-
-  step('Replay #3 — changed page should FAIL (regression detected)');
-  const r3 = await replayAndWait(session.id, 'replay#3');
-  const r3Failed = (r3.result?.diffs ?? []).filter(d => !d.passed);
-  assert(r3.test.status === 'failed', 'regression replay status is failed', { status: r3.test.status });
-  assert(r3Failed.length >= 1, 'regression replay has ≥1 failing diff', {
-    diffs: (r3.result?.diffs ?? []).map(d => ({ idx: d.headScreenshot?.eventIndex, pct: d.percentageDifference, passed: d.passed })),
-  });
-  if (r3Failed.length) {
-    const worst = Math.max(...r3Failed.map(d => d.percentageDifference));
-    ok(`largest diff = ${(worst * 100).toFixed(1)}% of viewport (threshold ${(r3Failed[0].threshold * 100).toFixed(0)}%)`);
   }
 }
 

@@ -33,6 +33,19 @@ export default function TestsListPage() {
 
   const tests = data?.tests ?? [];
 
+  // Resolve session id → title so test rows can show a human label. Tests only
+  // carry the sessionId, so we map against the project's sessions.
+  const { data: sessionsData } = useApi(() => api.getSessions(project.id, { limit: 200 }), {
+    deps: [project.id],
+  });
+  const titleBySession = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of sessionsData?.sessions ?? []) {
+      if (s.title) m.set(s.id, s.title);
+    }
+    return m;
+  }, [sessionsData]);
+
   // Counts (across all tests, not just the filtered set — best-effort)
   const counts = useMemo(() => {
     const all = data?.tests ?? [];
@@ -92,7 +105,12 @@ export default function TestsListPage() {
               </thead>
               <tbody>
                 {tests.map(t => (
-                  <TestRow key={t.id} test={t} onOpen={() => router.push(`/projects/${project.id}/tests/${t.id}`)} />
+                  <TestRow
+                    key={t.id}
+                    test={t}
+                    sessionTitle={titleBySession.get(t.sessionId)}
+                    onOpen={() => router.push(`/projects/${project.id}/tests/${t.id}`)}
+                  />
                 ))}
               </tbody>
             </table>
@@ -109,13 +127,20 @@ export default function TestsListPage() {
   );
 }
 
-function TestRow({ test, onOpen }: { test: TestExecution; onOpen: () => void }) {
+function TestRow({
+  test,
+  sessionTitle,
+  onOpen,
+}: {
+  test: TestExecution;
+  sessionTitle?: string;
+  onOpen: () => void;
+}) {
   const dur =
     test.startedAt && test.completedAt
       ? formatDuration(test.completedAt - test.startedAt)
       : '—';
 
-  const passedCount = test.result?.diffs?.filter(d => d.passed).length ?? 0;
   const failedCount = test.result?.diffs?.filter(d => !d.passed).length ?? 0;
   const totalFrames = test.result?.screenshots?.length ?? 0;
 
@@ -124,7 +149,10 @@ function TestRow({ test, onOpen }: { test: TestExecution; onOpen: () => void }) 
       <td>
         <div className="flex max-w-[460px] flex-col gap-0.5">
           <span className="strong text-fg">{truncateId(test.id, 12)}</span>
-          <span className="text-dim text-[11px]">session {truncateId(test.sessionId, 10)}</span>
+          <span className="text-dim truncate text-[11px]">
+            session {truncateId(test.sessionId, 10)}
+            {sessionTitle ? ` · ${sessionTitle}` : ''}
+          </span>
         </div>
       </td>
       <td>

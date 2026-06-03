@@ -22,7 +22,7 @@ Tracks which recorder events / use-cases have a fixture scenario wired through t
 | Done | Scenario | Path | Event(s) | Capture | Replay | Regression |
 |:---:|----------|------|----------|:---:|:---:|:---:|
 | ✅ | Click reveals text | `/click` | `click` | ✓ | ✓ | ✓ |
-| ⬜ | Text input | `/input` | `input` | – | – | – |
+| ✅ | Text input | `/input` | `input` | ✓ | ✓ | ✓ |
 | ⬜ | Form submit | `/submit` | `submit` | – | – | – |
 | ⬜ | Focus / blur | `/focus` | `focus`, `blur` | – | – | n/a |
 | ⬜ | Scroll | `/scroll` | `scroll` | – | – | – |
@@ -157,8 +157,10 @@ Each run uses a fresh `mkdtemp` `DATA_ROOT`, so runs don't pollute the repo `./d
 
 The fixture starts with one scenario (`click`) on purpose — get the pipeline stable first, then grow coverage one scenario at a time. To add one:
 
-1. **Add a scenario** to `scenarios.mjs`: `id` (its path), `body` (markup), `behavior` (the page's own JS — keep it deterministic: no time/random/animation), and optionally `regressionCss` + `hasRegression: true` for a negative variant. It's served at `/<id>` automatically.
-2. **Drive it in `scripts/e2e.mjs`**: navigate to `/<id>`, perform the interaction, and assert the resulting recorder events / replay diffs. (Wiring the orchestrator to iterate the registry is the next planned step.)
+1. **Add a scenario** to `scenarios.mjs`: `id` (its path), `body` (markup), `behavior` (the page's own JS — keep it deterministic: no time/random/animation), optionally `regressionCss` + `hasRegression: true` for a negative variant, and an `e2e` block (`record(page)` to drive it + `checks(events)` for capture assertions). It's served at `/<id>` and picked up by the e2e run automatically — the orchestrator iterates the registry.
+2. **Run `make e2e`** — the new scenario goes through record → baseline → stable-pass → regression-fail with no orchestrator changes needed.
 3. **Tick it off** in the [coverage checklist](#coverage-checklist) above.
+
+> Tip: size any regression panel so the color flip clears the 10% diff threshold with margin (the existing scenarios use an ~800×400 panel ≈ 15–16% of the 1920×1080 screenshot).
 
 Because the recorder/player/differ are exercised exactly as in production, a new scenario that records, replays, and diffs here is strong evidence it works for real apps too.
