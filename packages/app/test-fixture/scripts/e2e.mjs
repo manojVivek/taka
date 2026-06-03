@@ -277,7 +277,7 @@ async function main() {
       const t = m.text();
       if (t.includes('[Fixture]') || t.includes('[Taka]')) console.log(`  \x1b[90m[page] ${t}\x1b[0m`);
     });
-    await page.goto(FIXTURE_URL, { waitUntil: 'networkidle2' });
+    await page.goto(`${FIXTURE_URL}/click`, { waitUntil: 'networkidle2' });
     await waitFor('recorder to attach', () => page.evaluate(() => !!window.__takaRecorder));
     await page.click('#action-btn');
     await sleep(500);

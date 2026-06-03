@@ -4,9 +4,33 @@ A minimal, deterministic recording target plus a hermetic end-to-end test for th
 
 ## What it is
 
-- **`server.mjs`** — a tiny Express server (port **3003**) that serves one page: a single button (`#action-btn`) that reveals static text in a large fixed-size panel (`#output`) on click. It also serves the recorder's standalone IIFE bundle at `/recorder.js`.
-- **A server-side "regression mode"** — `POST /__mode {"mode":"regression"}` flips an in-memory flag so the output panel renders with a red background. Same element, same dimensions — only the color changes, producing a large, unambiguous pixel diff when the same recorded session is replayed.
-- **`scripts/e2e.mjs`** — a self-contained orchestrator that spawns its own API + fixture + Chrome, records a click, and asserts the full pipeline.
+- **`scenarios.mjs`** — the scenario registry. Each entry is one validation case (markup + behavior + optional regression variant) served at its own path. Adding coverage = adding a scenario here. See the [coverage checklist](#coverage-checklist) for what's covered and what's planned.
+- **`server.mjs`** — a tiny Express server (port **3003**) that renders one page per scenario at `/<id>` (e.g. `/click`), an index at `/`, and serves the recorder's standalone IIFE bundle at `/recorder.js`.
+- **A server-side "regression mode"** — `POST /__mode {"mode":"regression"}` flips an in-memory flag so a scenario applies its regression CSS (e.g. the click panel turns red). Same elements, same dimensions — only styling changes, producing a large, unambiguous pixel diff when the same recorded session is replayed.
+- **`scripts/e2e.mjs`** — a self-contained orchestrator that spawns its own API + fixture + Chrome, records a scenario interaction, and asserts the full pipeline.
+
+Each scenario lives on its own page so cases stay isolated and easy to manage — a flaky or in-progress scenario never blocks the others.
+
+## Coverage checklist
+
+Tracks which recorder events / use-cases have a fixture scenario wired through the e2e validation. Update this as scenarios land.
+
+**Legend** — **Capture**: the recorder emits the event and it reaches the API · **Replay**: the player reproduces it during replay · **Regression**: a negative variant produces a failing diff · **n/a**: not applicable for this event.
+
+> The player replays these event types: `click`, `input`, `scroll`, `navigation`, `submit`, `focus`, `resize`. `mutation` is captured as a side effect (not directly replayed); `mousemove` is captured but throttled and not replayed (intentionally out of scope).
+
+| Done | Scenario | Path | Event(s) | Capture | Replay | Regression |
+|:---:|----------|------|----------|:---:|:---:|:---:|
+| ✅ | Click reveals text | `/click` | `click` | ✓ | ✓ | ✓ |
+| ⬜ | Text input | `/input` | `input` | – | – | – |
+| ⬜ | Form submit | `/submit` | `submit` | – | – | – |
+| ⬜ | Focus / blur | `/focus` | `focus`, `blur` | – | – | n/a |
+| ⬜ | Scroll | `/scroll` | `scroll` | – | – | – |
+| ⬜ | Viewport resize | `/resize` | `resize` | – | – | n/a |
+| ⬜ | SPA navigation | `/navigation` | `navigation` | – | – | – |
+| ⬜ | Network capture + mock | `/network` | fetch / XHR | – | – | – |
+| ⬜ | Storage snapshot / auth restore | `/storage` | storage | – | – | n/a |
+| ⬜ | DOM mutation (observed) | via `/click` & others | `mutation` | – | n/a | n/a |
 
 ## Usage
 
@@ -46,12 +70,13 @@ So two replays of the unchanged page are byte-identical (0% diff → pass), and 
    │        │           └───────────────────────────────────────────────┘
    │        │
    ▼        ▼
-┌──────┐  ┌─────────────────┐        record            ┌──────────────────────┐
-│ API  │  │ fixture :3003   │◀── Chrome drives click ──│ puppeteer-core (host  │
-│ :3001│  │  GET /          │                          │ Chrome), recorder on  │
-│      │  │  GET /recorder.js│── recorder uploads ─────▶│ the page → POST       │
-│      │  │  POST /__mode    │   session to API          │ /projects/e2e/sessions│
-│      │  └─────────────────┘                          └──────────────────────┘
+┌──────┐  ┌──────────────────┐       record            ┌──────────────────────┐
+│ API  │  │ fixture :3003    │◀─ Chrome drives the ─────│ puppeteer-core (host  │
+│ :3001│  │  GET /  (index)  │   scenario interaction    │ Chrome), recorder on  │
+│      │  │  GET /<scenario> │── recorder uploads ──────▶│ the page → POST       │
+│      │  │  GET /recorder.js │   session to API          │ /projects/e2e/sessions│
+│      │  │  POST /__mode     │                          └──────────────────────┘
+│      │  └──────────────────┘
 │      │
 │      │   replay (TestService → @taka/player)
 │      │   ┌───────────────────────────────────────────────┐
@@ -111,10 +136,11 @@ Each run uses a fresh `mkdtemp` `DATA_ROOT`, so runs don't pollute the repo `./d
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/` | The fixture page (button + output panel; honors the current mode) |
+| `GET` | `/` | Index — lists the available scenarios |
+| `GET` | `/<id>` | A scenario page (e.g. `/click`); honors the current mode |
 | `GET` | `/recorder.js` | The recorder IIFE bundle (`window.TakaRecorder`) |
 | `POST` | `/__mode` | Body `{ "mode": "stable" \| "regression" }` — flip the in-memory render mode |
-| `GET` | `/health` | `{ ok, mode, projectId }` |
+| `GET` | `/health` | `{ ok, mode, projectId, scenarios }` |
 
 ## Env
 
@@ -129,10 +155,10 @@ Each run uses a fresh `mkdtemp` `DATA_ROOT`, so runs don't pollute the repo `./d
 
 ## Extending it
 
-The fixture starts as one button + one regression on purpose — get the pipeline stable first, then grow coverage. To add an interaction:
+The fixture starts with one scenario (`click`) on purpose — get the pipeline stable first, then grow coverage one scenario at a time. To add one:
 
-1. Add the element + behavior to the page in `server.mjs` (keep it deterministic — no time/random/animation).
-2. Drive it in the record phase of `scripts/e2e.mjs` (click/type), and add assertions on the resulting events.
-3. If it should produce a regression variant, gate the visual change behind the `mode` flag so the same recorded session diffs cleanly.
+1. **Add a scenario** to `scenarios.mjs`: `id` (its path), `body` (markup), `behavior` (the page's own JS — keep it deterministic: no time/random/animation), and optionally `regressionCss` + `hasRegression: true` for a negative variant. It's served at `/<id>` automatically.
+2. **Drive it in `scripts/e2e.mjs`**: navigate to `/<id>`, perform the interaction, and assert the resulting recorder events / replay diffs. (Wiring the orchestrator to iterate the registry is the next planned step.)
+3. **Tick it off** in the [coverage checklist](#coverage-checklist) above.
 
-Because the recorder/player/differ are exercised exactly as in production, a new interaction that records, replays, and diffs here is strong evidence it works for real apps too.
+Because the recorder/player/differ are exercised exactly as in production, a new scenario that records, replays, and diffs here is strong evidence it works for real apps too.
