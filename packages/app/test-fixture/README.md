@@ -24,7 +24,7 @@ Tracks which recorder events / use-cases have a fixture scenario wired through t
 | ✅ | Click reveals text | `/click` | `click` | ✓ | ✓ | ✓ |
 | ✅ | Text input | `/input` | `input` | ✓ | ✓ | ✓ |
 | ⬜ | Form submit | `/submit` | `submit` | – | – | – |
-| ⬜ | Focus / blur | `/focus` | `focus`, `blur` | – | – | n/a |
+| ✅ | Focus / blur | `/focus` | `focus`, `blur` | ✓ | ✓ | ✓ |
 | ⬜ | Scroll | `/scroll` | `scroll` | – | – | – |
 | ⬜ | Viewport resize | `/resize` | `resize` | – | – | n/a |
 | ⬜ | SPA navigation | `/navigation` | `navigation` | – | – | – |

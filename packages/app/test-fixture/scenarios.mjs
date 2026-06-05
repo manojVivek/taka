@@ -159,6 +159,90 @@ export const scenarios = [
       regression: true,
     },
   },
+
+  {
+    id: 'focus',
+    title: 'Focus moves between fields',
+    event: 'focus / blur',
+    description: 'Focusing one field then another captures focus + blur and highlights the active field.',
+    css: `
+      .field {
+        display: block;
+        width: 480px;
+        margin-bottom: 14px;
+        font: 16px system-ui, sans-serif;
+        padding: 12px 14px;
+        border: 2px solid #111111;
+        background: #ffffff;
+        color: #111111;
+        /* Determinism: kill the blinking caret and the platform focus ring —
+           we draw our own deterministic focus indicator below. */
+        caret-color: transparent;
+        outline: none;
+      }
+      .field:focus { border-color: #1f9d2f; background: #eaf7e6; }
+      /* Large fixed-size panel so the regression color flip clears the diff threshold. */
+      #status {
+        margin-top: 18px;
+        width: 800px;
+        height: 400px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font: 700 40px system-ui, sans-serif;
+        border: 2px solid #111111;
+        background: #ffffff;
+        color: #111111;
+      }
+    `,
+    body: `
+      <input id="field-a" class="field" type="text" autocomplete="off" placeholder="field A" />
+      <input id="field-b" class="field" type="text" autocomplete="off" placeholder="field B" />
+      <div id="status">idle</div>
+    `,
+    behavior: `
+      var status = document.getElementById('status');
+      function watch(id) {
+        document.getElementById(id).addEventListener('focus', function () {
+          status.textContent = 'focused: #' + id;
+        });
+      }
+      watch('field-a');
+      watch('field-b');
+    `,
+    regressionCss: `
+      #status { background: #ff0033 !important; color: #ffffff !important; }
+    `,
+    hasRegression: true,
+    e2e: {
+      record: async page => {
+        await page.focus('#field-a'); // focus(field-a)
+        await page.click('#field-b'); // blur(field-a) + focus(field-b) + click(field-b)
+      },
+      checks: events => {
+        const focuses = events.filter(e => e.type === 'focus');
+        const blurs = events.filter(e => e.type === 'blur');
+        return [
+          {
+            pass: focuses.some(e => (e.target || '').includes('field-a')),
+            label: 'captured focus on #field-a',
+            detail: focuses.map(e => e.target),
+          },
+          {
+            pass: blurs.some(e => (e.target || '').includes('field-a')),
+            label: 'captured blur on #field-a (focus moved away)',
+            detail: blurs.map(e => e.target),
+          },
+          {
+            pass: focuses.some(e => (e.target || '').includes('field-b')),
+            label: 'captured focus on #field-b',
+            detail: focuses.map(e => e.target),
+          },
+        ];
+      },
+      regression: true,
+    },
+  },
 ];
 
 export function scenarioById(id) {
