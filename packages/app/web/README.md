@@ -22,9 +22,9 @@ Runs on **http://localhost:9000** by default.
 | Route | Description |
 |-------|-------------|
 | `/` | Dashboard — session stats, recent sessions, test queue status |
-| `/sessions` | Paginated session list with search, sort, and inline actions (replay, view, delete) |
+| `/sessions` | Session list with search, sort, recorded-origin filter, pagination, and inline actions (replay, view, delete) |
 | `/sessions/[id]` | Session detail — baseline-frame flipstrip gallery, events, network requests, metadata |
-| `/tests` | Visual regression test results, filterable by status |
+| `/tests` | Visual regression test results, filterable by status (pass/fail) and the origin the test ran against |
 | `/tests/[id]` | Test detail — baseline vs. head screenshots, diff images, pass/fail breakdown |
 | `/getting-started` | Onboarding guide with recorder setup snippets and config reference |
 

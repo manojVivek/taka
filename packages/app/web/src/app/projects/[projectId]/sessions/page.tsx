@@ -1,11 +1,18 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useProject } from '@/lib/projectContext';
 import { useApi } from '@/lib/hooks';
 import { api, type SessionSummary } from '@/lib/api';
-import { formatRelativeTime, formatBytes, getBrowserName, truncateId } from '@/lib/utils';
+import {
+  formatRelativeTime,
+  formatBytes,
+  getBrowserName,
+  truncateId,
+  originOf,
+  displayOrigin,
+} from '@/lib/utils';
 import { Topbar } from '@/components/taka/Topbar';
 import { Panel } from '@/components/taka/Panel';
 import { Badge } from '@/components/taka/Badge';
@@ -16,34 +23,45 @@ import { ThemeToggle } from '@/components/taka/ThemeToggle';
 import { ReplayDialog } from '@/components/taka/ReplayDialog';
 
 const PAGE_SIZE = 20;
+const FETCH_LIMIT = 200; // POC scale: fetch all, then filter/paginate client-side
 
 export default function SessionsListPage() {
   const project = useProject();
   const router = useRouter();
   const [search, setSearch] = useState('');
-  const [offset, setOffset] = useState(0);
+  const [originFilter, setOriginFilter] = useState('');
   const [sortBy, setSortBy] = useState<'timestamp' | 'eventCount'>('timestamp');
+  const [page, setPage] = useState(0);
   const [replayFor, setReplayFor] = useState<SessionSummary | null>(null);
 
-  const isSearching = search.trim().length > 0;
-
   const { data, loading, refetch } = useApi(
-    () =>
-      isSearching
-        ? api.searchSessions(project.id, search.trim()).then(r => ({
-            sessions: r.results,
-            total: r.total,
-            limit: r.total,
-            offset: 0,
-          }))
-        : api.getSessions(project.id, { limit: PAGE_SIZE, offset, sortBy, sortOrder: 'desc' }),
-    { deps: [project.id, search, offset, sortBy] },
+    () => api.getSessions(project.id, { limit: FETCH_LIMIT, sortBy, sortOrder: 'desc' }),
+    { deps: [project.id, sortBy] },
   );
 
-  const sessions = data?.sessions ?? [];
+  const all = data?.sessions ?? [];
   const total = data?.total ?? 0;
-  const totalPages = isSearching ? 1 : Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
+
+  // Distinct recorded origins present, for the origin filter.
+  const origins = useMemo(
+    () => Array.from(new Set(all.map(s => originOf(s.url)))).sort(),
+    [all],
+  );
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return all.filter(s => {
+      if (originFilter && originOf(s.url) !== originFilter) return false;
+      if (q && !(s.url.toLowerCase().includes(q) || (s.title || '').toLowerCase().includes(q)))
+        return false;
+      return true;
+    });
+  }, [all, search, originFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageIdx = Math.min(page, totalPages - 1);
+  const pageItems = filtered.slice(pageIdx * PAGE_SIZE, pageIdx * PAGE_SIZE + PAGE_SIZE);
+  const isFiltered = !!originFilter || search.trim().length > 0;
 
   const deleteSession = async (s: SessionSummary) => {
     if (!confirm(`delete session ${s.id.slice(0, 8)}?`)) return;
@@ -51,20 +69,20 @@ export default function SessionsListPage() {
     refetch();
   };
 
-
   return (
     <>
-      <Topbar
-        crumbs={[{ label: project.name }, { label: 'sessions' }]}
-        right={<ThemeToggle />}
-      />
+      <Topbar crumbs={[{ label: project.name }, { label: 'sessions' }]} right={<ThemeToggle />} />
       <div className="tk-content">
         <div className="tk-pagehead">
           <div>
             <div className="eyebrow">// sessions</div>
             <h1>sessions.</h1>
             <div className="sub">
-              {loading ? 'loading…' : `${total.toLocaleString()} session${total === 1 ? '' : 's'} recorded`}
+              {loading
+                ? 'loading…'
+                : isFiltered
+                  ? `${filtered.length.toLocaleString()} of ${total.toLocaleString()} session${total === 1 ? '' : 's'}`
+                  : `${total.toLocaleString()} session${total === 1 ? '' : 's'} recorded`}
             </div>
           </div>
           <div className="actions">
@@ -74,10 +92,26 @@ export default function SessionsListPage() {
               value={search}
               onChange={e => {
                 setSearch(e.target.value);
-                setOffset(0);
+                setPage(0);
               }}
-              wrapperStyle={{ minWidth: 260 }}
+              wrapperStyle={{ minWidth: 240 }}
             />
+            <select
+              className="tk-select"
+              value={originFilter}
+              onChange={e => {
+                setOriginFilter(e.target.value);
+                setPage(0);
+              }}
+              title="filter by recorded origin"
+            >
+              <option value="">all origins</option>
+              {origins.map(o => (
+                <option key={o} value={o}>
+                  {displayOrigin(o)}
+                </option>
+              ))}
+            </select>
             <Button
               size="sm"
               onClick={() => setSortBy(s => (s === 'timestamp' ? 'eventCount' : 'timestamp'))}
@@ -89,9 +123,11 @@ export default function SessionsListPage() {
         </div>
 
         <Panel>
-          {sessions.length === 0 && !loading ? (
+          {pageItems.length === 0 && !loading ? (
             <div className="text-dim p-12 text-center text-xs">
-              {isSearching ? 'no sessions match your search.' : 'no sessions yet — install the recorder to get started.'}
+              {isFiltered
+                ? 'no sessions match these filters.'
+                : 'no sessions yet — install the recorder to get started.'}
             </div>
           ) : (
             <table className="tk-table">
@@ -108,7 +144,7 @@ export default function SessionsListPage() {
                 </tr>
               </thead>
               <tbody>
-                {sessions.map(s => (
+                {pageItems.map(s => (
                   <tr
                     key={s.id}
                     className="clickable"
@@ -147,22 +183,23 @@ export default function SessionsListPage() {
             </table>
           )}
 
-          {!isSearching && total > PAGE_SIZE && (
+          {filtered.length > PAGE_SIZE && (
             <div className="border-border bg-panel-2 flex items-center gap-3 border-t px-4 py-2.5">
               <span className="text-dim text-[11px]">
-                showing {offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total.toLocaleString()}
+                showing {pageIdx * PAGE_SIZE + 1}–{Math.min((pageIdx + 1) * PAGE_SIZE, filtered.length)} of{' '}
+                {filtered.length.toLocaleString()}
               </span>
               <div className="ml-auto flex gap-1">
-                <Button size="sm" disabled={offset === 0} onClick={() => setOffset(o => Math.max(0, o - PAGE_SIZE))}>
+                <Button size="sm" disabled={pageIdx === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>
                   ← prev
                 </Button>
                 <span className="text-mid self-center px-2 text-[11px]">
-                  page {currentPage} / {totalPages}
+                  page {pageIdx + 1} / {totalPages}
                 </span>
                 <Button
                   size="sm"
-                  disabled={offset + PAGE_SIZE >= total}
-                  onClick={() => setOffset(o => o + PAGE_SIZE)}
+                  disabled={pageIdx + 1 >= totalPages}
+                  onClick={() => setPage(p => p + 1)}
                 >
                   next →
                 </Button>
@@ -170,6 +207,12 @@ export default function SessionsListPage() {
             </div>
           )}
         </Panel>
+
+        {total > FETCH_LIMIT && (
+          <div className="text-dim mt-3 text-[11px]">
+            showing the {FETCH_LIMIT} most recent of {total.toLocaleString()} sessions — narrow with search.
+          </div>
+        )}
       </div>
 
       {replayFor && (

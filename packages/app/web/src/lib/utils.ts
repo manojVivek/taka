@@ -71,6 +71,11 @@ export function originOf(url: string): string {
   }
 }
 
+/** Compact origin label for filters/chips — drops the scheme (`https://x` → `x`). */
+export function displayOrigin(origin: string): string {
+  return origin.replace(/^https?:\/\//, '');
+}
+
 /**
  * Normalize a user-typed replay target into a bare origin, mirroring the API's
  * `normalizeOrigin` so the dialog can validate before submitting (and show the

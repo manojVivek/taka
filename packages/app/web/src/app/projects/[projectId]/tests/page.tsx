@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { useProject } from '@/lib/projectContext';
 import { useApi } from '@/lib/hooks';
 import { api, type TestExecution } from '@/lib/api';
-import { formatRelativeTime, formatDuration, truncateId } from '@/lib/utils';
+import { formatRelativeTime, formatDuration, truncateId, displayOrigin } from '@/lib/utils';
 import { Topbar } from '@/components/taka/Topbar';
 import { Panel } from '@/components/taka/Panel';
 import { Badge } from '@/components/taka/Badge';
@@ -17,21 +17,26 @@ type StatusFilter = 'all' | 'running' | 'failed' | 'passed' | 'pending';
 
 const STATUS_OPTIONS: StatusFilter[] = ['all', 'running', 'failed', 'passed', 'pending'];
 
+// The origin a test ran against — the replay target, else the recorded origin.
+function testOrigin(t: TestExecution): string | undefined {
+  return t.result?.targetOrigin || t.result?.sourceOrigin || undefined;
+}
+
 export default function TestsListPage() {
   const project = useProject();
   const router = useRouter();
   const [filter, setFilter] = useState<StatusFilter>('all');
+  const [originFilter, setOriginFilter] = useState('');
 
-  const { data, loading } = useApi(
-    () =>
-      api.getTests(project.id, {
-        limit: 100,
-        ...(filter === 'all' ? {} : { status: filter === 'passed' ? 'completed' : filter }),
-      }),
-    { deps: [project.id, filter], pollInterval: 2_000 },
-  );
+  // Fetch all (POC scale) and filter client-side, so status counts and the
+  // origin list stay accurate regardless of which filters are active.
+  const { data, loading } = useApi(() => api.getTests(project.id, { limit: 100 }), {
+    deps: [project.id],
+    pollInterval: 2_000,
+  });
 
-  const tests = data?.tests ?? [];
+  const all = useMemo(() => data?.tests ?? [], [data]);
+  const total = data?.total ?? 0;
 
   // Resolve session id → title so test rows can show a human label. Tests only
   // carry the sessionId, so we map against the project's sessions.
@@ -46,19 +51,33 @@ export default function TestsListPage() {
     return m;
   }, [sessionsData]);
 
-  // Counts (across all tests, not just the filtered set — best-effort)
-  const counts = useMemo(() => {
-    const all = data?.tests ?? [];
-    return {
-      all: data?.total ?? 0,
+  const origins = useMemo(
+    () => Array.from(new Set(all.map(testOrigin).filter(Boolean) as string[])).sort(),
+    [all],
+  );
+
+  const counts = useMemo(
+    () => ({
+      all: all.length,
       running: all.filter(t => t.status === 'running').length,
       failed: all.filter(t => t.status === 'failed').length,
       passed: all.filter(t => t.status === 'completed').length,
       pending: all.filter(t => t.status === 'pending').length,
-    };
-  }, [data]);
+    }),
+    [all],
+  );
 
-  const activeRunning = tests.some(t => t.status === 'running');
+  const filtered = useMemo(() => {
+    const wantStatus = filter === 'passed' ? 'completed' : filter;
+    return all.filter(t => {
+      if (filter !== 'all' && t.status !== wantStatus) return false;
+      if (originFilter && testOrigin(t) !== originFilter) return false;
+      return true;
+    });
+  }, [all, filter, originFilter]);
+
+  const isFiltered = filter !== 'all' || !!originFilter;
+  const activeRunning = all.some(t => t.status === 'running');
 
   return (
     <>
@@ -72,10 +91,27 @@ export default function TestsListPage() {
             <div className="eyebrow">// tests</div>
             <h1>tests.</h1>
             <div className="sub">
-              {loading ? 'loading…' : `${counts.all.toLocaleString()} test run${counts.all === 1 ? '' : 's'}`}
+              {loading
+                ? 'loading…'
+                : isFiltered
+                  ? `${filtered.length.toLocaleString()} of ${counts.all.toLocaleString()} test runs`
+                  : `${counts.all.toLocaleString()} test run${counts.all === 1 ? '' : 's'}`}
             </div>
           </div>
           <div className="actions">
+            <select
+              className="tk-select"
+              value={originFilter}
+              onChange={e => setOriginFilter(e.target.value)}
+              title="filter by the origin the test ran against"
+            >
+              <option value="">all origins</option>
+              {origins.map(o => (
+                <option key={o} value={o}>
+                  {displayOrigin(o)}
+                </option>
+              ))}
+            </select>
             <div className="tk-segmented">
               {STATUS_OPTIONS.map(s => (
                 <button key={s} className={filter === s ? 'on' : ''} onClick={() => setFilter(s)}>
@@ -87,9 +123,9 @@ export default function TestsListPage() {
         </div>
 
         <Panel>
-          {tests.length === 0 && !loading ? (
+          {filtered.length === 0 && !loading ? (
             <div className="text-dim p-12 text-center text-xs">
-              {filter === 'all' ? 'no tests yet — click replay on a session to start one.' : `no ${filter} tests.`}
+              {isFiltered ? 'no tests match these filters.' : 'no tests yet — click replay on a session to start one.'}
             </div>
           ) : (
             <table className="tk-table">
@@ -104,7 +140,7 @@ export default function TestsListPage() {
                 </tr>
               </thead>
               <tbody>
-                {tests.map(t => (
+                {filtered.map(t => (
                   <TestRow
                     key={t.id}
                     test={t}
@@ -120,6 +156,12 @@ export default function TestsListPage() {
         {activeRunning && (
           <div className="text-dim mt-4 flex items-center gap-2 text-[11px]">
             <span className="lime">●</span> auto-refreshing every 2s
+          </div>
+        )}
+
+        {total > 100 && (
+          <div className="text-dim mt-3 text-[11px]">
+            showing the 100 most recent of {total.toLocaleString()} test runs.
           </div>
         )}
       </div>
