@@ -332,12 +332,15 @@ export class SessionPlayer {
     if (!event.target) return;
 
     try {
-      // Try to submit the form
       await page.evaluate((selector) => {
-        const form = document.querySelector(selector) as HTMLFormElement;
-        if (form) {
-          form.submit();
-        }
+        const form = document.querySelector(selector) as HTMLFormElement | null;
+        if (!form) return;
+        // Dispatch a cancelable submit event so the page's own handler runs
+        // (including preventDefault for SPA forms) without triggering the
+        // browser's native form submission/navigation — a synthetic submit
+        // doesn't perform the default action. `form.submit()` would instead
+        // bypass the handler and navigate, losing the result the user saw.
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       }, event.target);
     } catch (error) {
       console.warn('[Player] Failed to replay submit:', error);

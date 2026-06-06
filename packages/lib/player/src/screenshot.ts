@@ -17,7 +17,12 @@ export class ScreenshotCapture {
     const sanitizedEventType = eventType ? sanitizeFilename(eventType) : 'unknown';
     const filename = `${eventIndex.toString().padStart(4, '0')}_${sanitizedEventType}_${timestamp}.png`;
 
-    const raw = await page.screenshot({ fullPage: true, type: 'png' });
+    // Capture the VIEWPORT (not the full page) — visual regression replays the
+    // user's session step by step, so each frame should reflect what was on
+    // screen at that moment, including the current scroll position. A full-page
+    // screenshot would be scroll-independent, making scroll interactions
+    // untestable.
+    const raw = await page.screenshot({ fullPage: false, type: 'png' });
     const bytes = Buffer.from(raw);
 
     console.log('[Screenshot] Captured:', filename, `(${bytes.length} bytes)`);
@@ -53,27 +58,8 @@ export class ScreenshotCapture {
         bytes,
       };
     } catch (error) {
-      console.warn('[Screenshot] Element capture failed, falling back to full page:', error);
+      console.warn('[Screenshot] Element capture failed, falling back to viewport:', error);
       return this.capture(page, eventIndex, eventType);
     }
-  }
-
-  async captureViewport(
-    page: Page,
-    eventIndex: number,
-    eventType?: string,
-  ): Promise<CapturedScreenshot> {
-    const timestamp = Date.now();
-    const sanitizedEventType = eventType ? sanitizeFilename(eventType) : 'viewport';
-    const filename = `${eventIndex.toString().padStart(4, '0')}_${sanitizedEventType}_viewport_${timestamp}.png`;
-
-    const raw = await page.screenshot({ fullPage: false, type: 'png' });
-    const bytes = Buffer.from(raw);
-
-    console.log('[Screenshot] Viewport captured:', filename, `(${bytes.length} bytes)`);
-    return {
-      meta: { filename, eventIndex, eventType: sanitizedEventType, timestamp },
-      bytes,
-    };
   }
 }
