@@ -26,13 +26,14 @@ kill:
 	-lsof -ti:9004 | xargs kill -9 2>/dev/null
 	@echo "Ports 9000–9004 cleared"
 
-# Run the test fixture standalone on :9002 for manual recording.
-# Pass TAKA_PROJECT_ID to attribute recordings to a project.
+# Run a fixture standalone on :9002 for manual recording (stable mode by default).
+# Pass TAKA_PROJECT_ID to attribute recordings to a project, or FIXTURE_MODE=regression.
 fixture:
-	TAKA_PROJECT_ID=$(or $(TAKA_PROJECT_ID),) node packages/app/test-fixture/server.mjs
+	TAKA_PROJECT_ID=$(or $(TAKA_PROJECT_ID),) FIXTURE_MODE=$(or $(FIXTURE_MODE),stable) node packages/app/test-fixture/server.mjs
 
-# Full hermetic end-to-end test: builds, then spawns its own API + fixture +
-# Chrome, records a session, and asserts record → baseline → pass → regression-fail.
+# Full hermetic end-to-end test: builds, then spawns its own API + three fixed-mode
+# fixtures (stable, preview, regression) + Chrome, and replays each scenario
+# cross-domain against the preview (pass) and regression (fail) origins, in parallel.
 e2e: build
 	node packages/app/test-fixture/scripts/e2e.mjs
 
@@ -40,7 +41,7 @@ e2e: build
 e2e-headful: build
 	E2E_HEADFUL=1 node packages/app/test-fixture/scripts/e2e.mjs
 
-# Run the flow, then leave API + fixture + dashboard up to play with.
+# Run the flow, then leave API + the 3 fixtures + dashboard up to play with.
 # Ctrl+C tears everything down and cleans the temp data dir.
 e2e-keep: build
 	E2E_KEEP=1 node packages/app/test-fixture/scripts/e2e.mjs

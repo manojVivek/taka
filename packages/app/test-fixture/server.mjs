@@ -2,13 +2,18 @@
 //
 // Serves one page per validation scenario (see scenarios.mjs) at /<id>. Each
 // page wires in the recorder via a <script> tag and exposes a deterministic
-// interaction. A server-held `mode` flag ("stable" | "regression") applies a
-// scenario's regression CSS so the SAME recorded session, replayed after the
-// flag is flipped, produces a large, unambiguous pixel diff.
+// interaction.
+//
+// The render mode is FIXED at startup via the FIXTURE_MODE env var
+// ("stable" | "regression") — not flipped at runtime. Run one instance in each
+// mode on its own port and you get two origins: replaying a recorded session
+// against the stable origin passes (matches its baseline), against the
+// regression origin fails (a scenario's regressionCss produces a large diff).
+// Fixed modes mean no shared mutable state, so scenarios can run in parallel.
 //
 // Determinism is enforced by the shared shell (no animations/transitions,
 // system fonts, no clocks/random) so stable replays are pixel-identical and
-// only the regression flip causes a diff.
+// only the regression styling causes a diff.
 
 import express from 'express';
 import { readFileSync } from 'node:fs';
@@ -22,6 +27,13 @@ const PORT = Number(process.env.FIXTURE_PORT || 9002);
 const PROJECT_ID = process.env.TAKA_PROJECT_ID || '';
 const API_ENDPOINT = process.env.TAKA_API_ENDPOINT || 'http://localhost:9001/api';
 
+const MODE = process.env.FIXTURE_MODE || 'stable';
+if (MODE !== 'stable' && MODE !== 'regression') {
+  console.error(`[Fixture] invalid FIXTURE_MODE="${MODE}" (use "stable" or "regression")`);
+  process.exit(1);
+}
+const IS_REGRESSION = MODE === 'regression';
+
 // Path to the recorder's standalone IIFE bundle (built by `rollup -c`).
 const RECORDER_BUNDLE = join(
   __dirname,
@@ -33,10 +45,10 @@ const RECORDER_BUNDLE = join(
   'browser.global.js',
 );
 
-let mode = 'stable'; // flipped at runtime via POST /__mode
-
 // Shared shell — deterministic reset + recorder wiring around a scenario body.
-function renderScenario(scenario, isRegression) {
+// The regression CSS (if any) is baked in for the whole process when this
+// instance runs in regression mode.
+function renderScenario(scenario) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -53,10 +65,10 @@ function renderScenario(scenario, isRegression) {
   }
   h1 { font-size: 22px; margin: 0 0 24px; }
 ${scenario.css || ''}
-${isRegression && scenario.regressionCss ? scenario.regressionCss : ''}
+${IS_REGRESSION && scenario.regressionCss ? scenario.regressionCss : ''}
 </style>
 </head>
-<body data-scenario="${scenario.id}">
+<body data-scenario="${scenario.id}" data-mode="${MODE}">
   <h1>${scenario.title}</h1>
   ${scenario.body}
 
@@ -94,7 +106,7 @@ function renderIndex() {
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Taka fixture</title>
+<title>Taka fixture (${MODE})</title>
 <style>
   body { font-family: system-ui, sans-serif; padding: 40px; color: #111; }
   code { background: #f0f0f0; padding: 1px 6px; }
@@ -104,7 +116,7 @@ function renderIndex() {
 </head>
 <body>
   <h1>Taka test fixture</h1>
-  <p>mode: <strong>${mode}</strong> · project: <strong>${PROJECT_ID || 'unset'}</strong></p>
+  <p>mode: <strong>${MODE}</strong> · project: <strong>${PROJECT_ID || 'unset'}</strong></p>
   <ul>
 ${rows}
   </ul>
@@ -113,7 +125,6 @@ ${rows}
 }
 
 const app = express();
-app.use(express.json());
 
 // --- reserved routes (registered before the /:id catch-all) ---
 app.get('/recorder.js', (_req, res) => {
@@ -127,18 +138,8 @@ app.get('/recorder.js', (_req, res) => {
   }
 });
 
-app.post('/__mode', (req, res) => {
-  const next = req.body && req.body.mode;
-  if (next !== 'stable' && next !== 'regression') {
-    return res.status(400).json({ error: 'mode must be "stable" or "regression"' });
-  }
-  mode = next;
-  console.log('[Fixture] mode →', mode);
-  res.json({ mode });
-});
-
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, mode, projectId: PROJECT_ID, scenarios: scenarios.map(s => s.id) });
+  res.json({ ok: true, mode: MODE, projectId: PROJECT_ID, scenarios: scenarios.map(s => s.id) });
 });
 
 app.get('/', (_req, res) => {
@@ -151,12 +152,12 @@ app.get('/:id', (req, res) => {
   if (!scenario) {
     return res.status(404).type('text/plain').send(`unknown scenario: ${req.params.id}`);
   }
-  res.type('html').send(renderScenario(scenario, mode === 'regression'));
+  res.type('html').send(renderScenario(scenario));
 });
 
 app.listen(PORT, () => {
   console.log(
-    `[Fixture] serving on http://localhost:${PORT} (mode=${mode}, project=${PROJECT_ID || 'unset'}, scenarios=${scenarios
+    `[Fixture] serving on http://localhost:${PORT} (mode=${MODE}, project=${PROJECT_ID || 'unset'}, scenarios=${scenarios
       .map(s => s.id)
       .join(',')})`,
   );

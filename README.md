@@ -66,7 +66,7 @@ Open http://localhost:9000 to see the dashboard. To generate a session, run the 
 
 `make e2e` runs the whole pipeline hermetically: it spawns its own API + fixture + Chrome on a temp data dir, records a click, then asserts **record → baseline → unchanged-passes → regression-fails**, and tears everything down. Exit code 0 means the pipeline is healthy end to end.
 
-`make e2e-keep` runs the same flow but leaves everything running afterward — the API, both fixtures, the dashboard (pre-populated with the automated session + test runs), and a **dedicated recorder app on :9004** for creating your own sessions by hand (open it, interact, then Replay from the dashboard); Ctrl+C tears it down. See [`packages/app/test-fixture/README.md`](packages/app/test-fixture/README.md) for the full architecture.
+`make e2e-keep` runs the same flow but leaves everything running afterward — the API, the three fixed-mode fixtures (stable `:9002`, preview `:9003`, regression `:9004`), and the dashboard (pre-populated with the recorded sessions + test runs). Record your own sessions on the stable origin, then Replay from the dashboard targeting the preview (passes) or regression (fails) origin; Ctrl+C tears it down. See [`packages/app/test-fixture/README.md`](packages/app/test-fixture/README.md) for the full architecture.
 
 ### Manual
 
@@ -87,7 +87,7 @@ The project ships a `Makefile` with common operations. Always prefer these over 
 | `make build` | Build all packages (incl. the recorder browser bundle) |
 | `make e2e` | Hermetic end-to-end test (record → baseline → pass → regression-fail) |
 | `make e2e-headful` | Same, with a visible browser for debugging |
-| `make e2e-keep` | Run the flow, then leave API + fixtures + a manual recorder (:9004) + dashboard up to explore (Ctrl+C to tear down) |
+| `make e2e-keep` | Run the flow, then leave API + the 3 fixed-mode fixtures + dashboard up to explore (Ctrl+C to tear down) |
 | `make fixture` | Run the test fixture standalone on :9002 for manual recording |
 | `make kill` | Kill dev/e2e ports (9000–9004) |
 | `make health` | Check API health endpoint |
@@ -159,7 +159,7 @@ Most of the platform is functional end-to-end. You can record a session, replay 
   - Minimal deterministic button page with the recorder wired in via a `<script>` tag
   - Server-side "regression mode" that flips the output to a red background for a guaranteed visual diff
   - Hermetic `make e2e` orchestrator: spawns API + fixture + Chrome, records, and asserts record → baseline → pass → regression-fail
-  - Cross-origin validation: a second fixture on :9003 stands in for a preview; the orchestrator replays the :9002-recorded session against it and asserts stable-pass / regression-fail
+  - Three fixed-mode fixtures (stable/preview/regression on separate ports) — each scenario records on stable, then replays cross-domain against preview (pass) and regression (fail); scenarios run in parallel
 
 ### In progress / not yet built
 

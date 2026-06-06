@@ -366,7 +366,7 @@ Always use `make` targets instead of running raw commands. The project Makefile 
 - `make build` — Build all packages (incl. the recorder browser bundle)
 - `make e2e` — Hermetic end-to-end test (record → baseline → pass → regression-fail)
 - `make e2e-headful` — Same, with a visible browser for debugging
-- `make e2e-keep` — Run the flow, then leave API + fixtures + a manual recorder app (:9004) + dashboard up to explore (Ctrl+C tears down)
+- `make e2e-keep` — Run the flow, then leave API + the 3 fixed-mode fixtures (stable :9002, preview :9003, regression :9004) + dashboard up to explore; record on stable, replay against preview/regression (Ctrl+C tears down)
 - `make fixture` — Run the test fixture standalone on :9002 for manual recording
 - `make kill` — Kill all dev/e2e ports (9000–9004)
 - `make health` — Check API health

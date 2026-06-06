@@ -5,9 +5,9 @@ A minimal, deterministic recording target plus a hermetic end-to-end test for th
 ## What it is
 
 - **`scenarios.mjs`** — the scenario registry. Each entry is one validation case (markup + behavior + optional regression variant) served at its own path. Adding coverage = adding a scenario here. See the [coverage checklist](#coverage-checklist) for what's covered and what's planned.
-- **`server.mjs`** — a tiny Express server (port **9002**) that renders one page per scenario at `/<id>` (e.g. `/click`), an index at `/`, and serves the recorder's standalone IIFE bundle at `/recorder.js`.
-- **A server-side "regression mode"** — `POST /__mode {"mode":"regression"}` flips an in-memory flag so a scenario applies its regression CSS (e.g. the click panel turns red). Same elements, same dimensions — only styling changes, producing a large, unambiguous pixel diff when the same recorded session is replayed.
-- **`scripts/e2e.mjs`** — a self-contained orchestrator that spawns its own API + fixture + Chrome, records a scenario interaction, and asserts the full pipeline. It also starts a **second fixture on :9003** (a stand-in "preview" deployment) and runs a [cross-origin replay](#cross-origin-replay) check.
+- **`server.mjs`** — a tiny Express server that renders one page per scenario at `/<id>` (e.g. `/click`), an index at `/`, and serves the recorder's standalone IIFE bundle at `/recorder.js`. Its render mode is **fixed at startup** via the `FIXTURE_MODE` env var (`stable` | `regression`).
+- **Fixed-mode origins (no runtime flag)** — run one instance in `stable` mode and one in `regression` mode on different ports. The regression instance bakes in each scenario's `regressionCss` (e.g. the panel turns red — same elements/dimensions, only styling changes). Replaying a recorded session against a stable origin **passes** (matches its baseline); against the regression origin it **fails** (a large, unambiguous diff). No shared mutable state means scenarios run in parallel, and you validate by origin: point replays at the stable origin → all pass, at the regression origin → all fail.
+- **`scripts/e2e.mjs`** — a self-contained orchestrator that spawns its own API + **three fixed-mode fixtures** (stable, preview, regression) + Chrome, records each scenario on the stable origin, then replays it **cross-domain** against the preview origin (expect pass) and the regression origin (expect fail) — all scenarios in parallel.
 
 Each scenario lives on its own page so cases stay isolated and easy to manage — a flaky or in-progress scenario never blocks the others.
 
@@ -29,22 +29,20 @@ Tracks which recorder events / use-cases have a fixture scenario wired through t
 | ⬜ | SPA navigation | `/navigation` | `navigation` | – | – | – |
 | ⬜ | Network capture + mock | `/network` | fetch / XHR | – | – | – |
 | ⬜ | Storage snapshot / auth restore | `/storage` | storage | – | – | n/a |
-| ✅ | Cross-origin replay (preview) | record `/click` on :9002, replay on :9003 | `targetOrigin` | n/a | ✓ | ✓ |
+| ✅ | Cross-origin replay (preview) | every scenario: record on stable, replay on preview + regression | `targetOrigin` | n/a | ✓ | ✓ |
 
 ## Usage
 
 ```bash
-make e2e           # full hermetic test (build + record + replays + cross-origin + asserts), tears down
+make e2e           # full hermetic test (build + record + cross-domain pass/fail replays), tears down
 make e2e-headful   # same, with a visible browser (E2E_HEADFUL=1)
-make e2e-keep      # run the flow, then leave API + fixtures + a manual recorder + dashboard up to explore
-make fixture       # run the fixture standalone on :9002 for manual recording
+make e2e-keep      # run the flow, then leave API + the 3 fixtures + dashboard up to explore
+make fixture       # run a stable fixture standalone on :9002 for manual recording
 ```
 
-- **`make e2e`** is the gate: exit code 0 means the whole pipeline is healthy. Run it after any change to the recorder, player, differ, storage, or API.
-- **`make e2e-keep`** runs the identical flow but, instead of tearing down, boots the dashboard and a **dedicated recorder app on :9004**, then blocks — printing the URLs so you can poke around a project that already has the automated session + test runs in it. To **create your own** sessions by hand: open the recorder app (`http://localhost:9004/click` or `/input`), click/type, then switch to the dashboard — the new session appears under sessions, ready to **Replay** (optionally targeting the preview on :9003 in the Replay dialog). The two automated fixtures (primary :9002, preview :9003) also stay up. **Ctrl+C** is the teardown trigger; it stops every process and removes the temp data dir.
-
-  > The recorder app on :9004 records into the same `e2e` project, but on its own origin (so its sessions stay distinct from the automated fixtures, whose stable/regression mode the run toggles). It starts in `stable` mode.
-- **`make fixture`** runs just the page server for manual recording. Pass `TAKA_PROJECT_ID=<id>` to attribute recordings to a project (create it first via `POST /api/projects` or the dashboard).
+- **`make e2e`** is the gate: exit code 0 means the whole pipeline is healthy. Run it after any change to the recorder, player, differ, storage, or API. It runs all scenarios **in parallel** against three fixed-mode origins (stable `:9002`, preview `:9003`, regression `:9004`).
+- **`make e2e-keep`** runs the identical flow but, instead of tearing down, boots the dashboard and blocks — printing the URLs so you can poke around a project pre-loaded with the recorded sessions + test runs. The three fixtures stay up: **record your own** sessions on the stable origin (`http://localhost:9002/click` or `/input`), then **Replay** from the dashboard targeting the **preview** (`:9003` → passes) or **regression** (`:9004` → fails) origin in the Replay dialog. **Ctrl+C** tears everything down and removes the temp data dir.
+- **`make fixture`** runs just the page server (stable mode) for manual recording. Pass `TAKA_PROJECT_ID=<id>` to attribute recordings to a project (create it first via `POST /api/projects` or the dashboard), or `FIXTURE_MODE=regression` to serve the regression variant.
 
 ## Why it's deterministic
 
@@ -56,7 +54,7 @@ Visual regression testing needs pixel-stable screenshots. The page is built to r
 - a fixed-size output panel (the regression is a pure background-color change — no reflow, identical dimensions),
 - static text.
 
-So two replays of the unchanged page are byte-identical (0% diff → pass), and only the regression flip causes a diff — and that diff (a large red panel) comfortably clears the 10% `VISUAL_DIFF_THRESHOLD`.
+So replaying against the stable and preview origins is byte-identical to the baseline (0% diff → pass), and only the regression origin's styling causes a diff — and that diff (a large red panel) comfortably clears the 10% `VISUAL_DIFF_THRESHOLD`.
 
 ## Architecture
 
@@ -66,25 +64,25 @@ So two replays of the unchanged page are byte-identical (0% diff → pass), and 
                         scripts/e2e.mjs  (orchestrator, hermetic)
                         ┌───────────────────────────────────────────────┐
         spawns ─────────┤  • temp DATA_ROOT                              │
-   ┌────────────────────┤  • drives record + 3 replays                  │
-   │        │           │  • asserts + tears down (process groups)       │
+   ┌────────────────────┤  • record on stable, replay vs preview + regr │
+   │        │           │  • all scenarios in parallel; tears down        │
    │        │           └───────────────────────────────────────────────┘
    │        │
    ▼        ▼
-┌──────┐  ┌──────────────────┐       record            ┌──────────────────────┐
-│ API  │  │ fixture :9002    │◀─ Chrome drives the ─────│ puppeteer-core (host  │
-│ :9001│  │  GET /  (index)  │   scenario interaction    │ Chrome), recorder on  │
-│      │  │  GET /<scenario> │── recorder uploads ──────▶│ the page → POST       │
-│      │  │  GET /recorder.js │   session to API          │ /projects/e2e/sessions│
-│      │  │  POST /__mode     │                          └──────────────────────┘
-│      │  └──────────────────┘
+┌──────┐  ┌─────────────────────────────────────┐   record   ┌──────────────────────┐
+│ API  │  │ stable     :9002  (FIXTURE_MODE=     │◀─ Chrome ──│ puppeteer-core (host  │
+│ :9001│  │             stable) — record source  │  drives    │ Chrome), recorder on  │
+│      │  │ preview    :9003  (stable)  ── pass   │  scenario  │ the page → POST       │
+│      │  │ regression :9004  (regression)─ fail  │            │ /projects/e2e/sessions│
+│      │  │  GET /  ·  GET /<scenario>  ·  /recorder.js  └──────────────────────┘
+│      │  └─────────────────────────────────────┘
 │      │
-│      │   replay (TestService → @taka/player)
-│      │   ┌───────────────────────────────────────────────┐
-│      │──▶│ headless Chrome navigates to the fixture URL,   │
-│      │   │ replays events, screenshots significant frames; │
-│      │   │ @taka/differ pixel-diffs head vs baseline       │
-│      │   └───────────────────────────────────────────────┘
+│      │   replay (TestService → @taka/player), per scenario:
+│      │   ┌──────────────────────────────────────────────────────┐
+│      │──▶│ goto stable (baseline), then rebase onto preview      │
+│      │   │ (targetOrigin → pass) and regression (→ fail);         │
+│      │   │ viewport screenshots; @taka/differ diffs vs baseline   │
+│      │   └──────────────────────────────────────────────────────┘
 └──────┘
    ▲
    │ (in keep mode) the web dashboard :9000 is also booted, proxying /api → :9001
@@ -109,29 +107,19 @@ The fixture page loads the recorder as a plain script: `<script src="/recorder.j
 
 During recording the orchestrator drives host Chrome to the page, clicks the button, then calls `window.__takaRecorder.stop()` to force a synchronous flush, and polls the API until the session arrives with the expected `navigation` + `click` events.
 
-### Why one recorded session, replayed three times
+### One recorded session, replayed cross-domain against three origins
 
-The crux of the regression test: the player (`@taka/player`) only mocks **recorded `fetch`/XHR** requests. The top-level HTML document is a browser navigation, never captured in `networkRequests`, so `page.goto()` re-fetches it **fresh from the fixture on every replay**. That lets a single recorded session be screenshotted against different server output:
+The crux: the player (`@taka/player`) only mocks **recorded `fetch`/XHR** requests. The top-level HTML document is a browser navigation, never captured in `networkRequests`, so `page.goto()` re-fetches it **fresh from whichever origin the replay is pointed at**. Combined with the player's [`targetOrigin`](../../lib/player/README.md#replaying-against-a-different-origin) rebasing, a single session recorded on the stable origin is screenshotted against three same-code origins running in fixed modes:
 
-| Step | Fixture mode | Outcome |
-|------|--------------|---------|
-| Replay 1 | stable | no baseline yet → screenshots stored as the **baseline** (`isBaseline: true`) |
-| Replay 2 | stable | diff vs baseline → identical → **passed** |
-| _toggle_ | → regression | `POST /__mode {"mode":"regression"}` |
-| Replay 3 | regression | output panel is red → diff > threshold → **failed** |
+| Replay | Target origin | Outcome |
+|--------|---------------|---------|
+| baseline | stable `:9002` (recorded origin) | no baseline yet → screenshots stored as the **baseline** (`isBaseline: true`) |
+| preview | preview `:9003` (`targetOrigin`, stable) | rebased nav lands on :9003, renders identically → diff ≈ 0 → **passes** (a good preview) |
+| regression | regression `:9004` (`targetOrigin`) | panel is red → diff > threshold → **fails** (a regressed preview); `TestResult` records `targetOrigin` |
 
-The player sets `window.__taka_replay = true` via `evaluateOnNewDocument` before page scripts run, so the recorder stays dormant during replay while the page's own click handler still fires (producing the visible result that gets screenshotted).
+This validates **both** directions of cross-origin replay at once — a matching preview passes (no false diff from rebasing), a changed one fails — for every scenario, so there's no separate cross-origin step. If rebasing were broken, the preview replay would mismatch (false fail) or the regression replay wouldn't reach :9004 (false pass).
 
-### Cross-origin replay
-
-After the scenario loop, the orchestrator validates the player's [`targetOrigin`](../../lib/player/README.md#replaying-against-a-different-origin) rebasing. A second fixture instance (same `server.mjs`) runs on **:9003** as a stand-in preview deployment. The harness reuses the click session — **recorded on :9002**, with its baseline captured there — and replays it against :9003:
-
-| Step | Preview (:9003) mode | Expected |
-|------|----------------------|----------|
-| replay with `targetOrigin=http://localhost:9003` | stable | **passes** — rebased nav landed on :9003 and its render matches the :9002 baseline; the `TestResult` records `targetOrigin` |
-| replay again | regression | **fails** — the preview's panel is red → diff clears the threshold |
-
-If rebasing were broken the stable replay would error or mismatch, so a green run is strong evidence the feature works against real preview URLs.
+Because the three origins hold no shared mutable state, scenarios run **in parallel**. The player sets `window.__taka_replay = true` via `evaluateOnNewDocument` before page scripts run, so the recorder stays dormant during replay while the page's own handler still fires (producing the visible result that gets screenshotted).
 
 ### Process model & teardown
 
@@ -149,28 +137,29 @@ Each run uses a fresh `mkdtemp` `DATA_ROOT`, so runs don't pollute the repo `./d
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/` | Index — lists the available scenarios |
-| `GET` | `/<id>` | A scenario page (e.g. `/click`); honors the current mode |
+| `GET` | `/<id>` | A scenario page (e.g. `/click`), rendered in this instance's fixed mode |
 | `GET` | `/recorder.js` | The recorder IIFE bundle (`window.TakaRecorder`) |
-| `POST` | `/__mode` | Body `{ "mode": "stable" \| "regression" }` — flip the in-memory render mode |
-| `GET` | `/health` | `{ ok, mode, projectId, scenarios }` |
+| `GET` | `/health` | `{ ok, mode, projectId, scenarios }` (mode is fixed at startup) |
 
 ## Env
 
 | Var | Default | Purpose |
 |-----|---------|---------|
 | `FIXTURE_PORT` | `9002` | Fixture server port |
+| `FIXTURE_MODE` | `stable` | Render mode for this instance: `stable` or `regression` (fixed at startup) |
 | `TAKA_PROJECT_ID` | (unset) | Project the recorder attributes sessions to |
 | `TAKA_API_ENDPOINT` | `http://localhost:9001/api` | API the recorder uploads to |
 | `CHROME_PATH` | macOS Google Chrome | Chrome binary for the orchestrator's Puppeteer (e2e) |
 | `E2E_HEADFUL` | (unset) | Set to `1` to launch a visible browser in the orchestrator |
 | `E2E_KEEP` | (unset) | Set to `1` to leave servers up after the flow (Ctrl+C to tear down) |
+| `E2E_{API,STABLE,PREVIEW,REGRESSION,WEB}_PORT` | `9001`/`9002`/`9003`/`9004`/`9000` | Override e2e ports — e.g. run on a 91xx range alongside a `make e2e-keep` session holding the defaults |
 
 ## Extending it
 
 The fixture starts with one scenario (`click`) on purpose — get the pipeline stable first, then grow coverage one scenario at a time. To add one:
 
 1. **Add a scenario** to `scenarios.mjs`: `id` (its path), `body` (markup), `behavior` (the page's own JS — keep it deterministic: no time/random/animation), optionally `regressionCss` + `hasRegression: true` for a negative variant, and an `e2e` block (`record(page)` to drive it + `checks(events)` for capture assertions). It's served at `/<id>` and picked up by the e2e run automatically — the orchestrator iterates the registry.
-2. **Run `make e2e`** — the new scenario goes through record → baseline → stable-pass → regression-fail with no orchestrator changes needed.
+2. **Run `make e2e`** — the new scenario goes through record (stable) → baseline → preview-pass → regression-fail with no orchestrator changes needed.
 3. **Tick it off** in the [coverage checklist](#coverage-checklist) above.
 
 > Tip: the player screenshots the **viewport** (1920×1080), reflecting the current scroll position — not the full page. Size any regression panel so it's a comfortable fraction of the viewport (the scenarios use an ~800–1000px-wide panel ≈ 15–29%) and make sure it's actually on screen in the frame it should affect. For a scroll scenario, put the regression target **below the fold** so it only enters the viewport — and only produces a diff — once the scroll has been replayed.

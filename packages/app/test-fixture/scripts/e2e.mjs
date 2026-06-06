@@ -33,21 +33,21 @@ const REPO_ROOT = resolve(__dirname, '..', '..', '..', '..');
 // on an alternate range (e.g. E2E_API_PORT=9101 …) alongside a `make e2e-keep`
 // session that's holding the defaults.
 const API_PORT = Number(process.env.E2E_API_PORT || 9001);
-const FIXTURE_PORT = Number(process.env.E2E_FIXTURE_PORT || 9002);
-// A second fixture instance on another port stands in for a Vercel-style
-// "preview" deployment — the target a recorded session is replayed against to
-// validate it cross-origin. Same server code as the primary fixture.
+// Three fixed-mode fixtures (FIXTURE_MODE set at startup), modeling preview-env
+// validation. A session is recorded + baselined on STABLE, then replayed
+// cross-domain against two other origins running the same code:
+//   - PREVIEW    (stable mode)     → a good preview → replays PASS.
+//   - REGRESSION (regression mode) → a regressed preview → replays FAIL.
+// Fixed modes (no runtime flip, no shared state) also let scenarios run in
+// parallel. The stable fixture doubles as the manual record target in keep mode.
+const STABLE_PORT = Number(process.env.E2E_STABLE_PORT || 9002);
 const PREVIEW_PORT = Number(process.env.E2E_PREVIEW_PORT || 9003);
-// A dedicated recorder-mode fixture, started only in keep mode (E2E_KEEP), as a
-// manual sandbox: open it in a browser and interact to capture fresh sessions
-// into the project — kept separate from the two fixtures above, whose modes the
-// automated run toggles.
-const RECORD_PORT = Number(process.env.E2E_RECORD_PORT || 9004);
+const REGRESSION_PORT = Number(process.env.E2E_REGRESSION_PORT || 9004);
 const WEB_PORT = Number(process.env.E2E_WEB_PORT || 9000);
 const API_BASE = `http://localhost:${API_PORT}/api`;
-const FIXTURE_URL = `http://localhost:${FIXTURE_PORT}`;
+const STABLE_URL = `http://localhost:${STABLE_PORT}`;
 const PREVIEW_URL = `http://localhost:${PREVIEW_PORT}`;
-const RECORD_URL = `http://localhost:${RECORD_PORT}`;
+const REGRESSION_URL = `http://localhost:${REGRESSION_PORT}`;
 const WEB_URL = `http://localhost:${WEB_PORT}`;
 const PROJECT_ID = 'e2e';
 const CHROME_PATH =
@@ -187,17 +187,8 @@ async function replayAndWait(sessionId, label, body = {}) {
   return { testId, test, result };
 }
 
-async function setMode(mode, base = FIXTURE_URL) {
-  const { body } = await fetchJson(`${base}/__mode`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode }),
-  });
-  return body?.mode;
-}
-
-// Drive a scenario's interaction in a fresh page, flush, and return the
-// recorded session (disambiguated by URL so each scenario gets its own).
+// Drive a scenario's interaction in a fresh page on the STABLE fixture, flush,
+// and return the recorded session (disambiguated by URL so each gets its own).
 async function recordScenario(browser, scenario) {
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
@@ -206,7 +197,7 @@ async function recordScenario(browser, scenario) {
     if (t.includes('[Fixture]') || t.includes('[Taka]')) console.log(`  \x1b[90m[page] ${t}\x1b[0m`);
   });
   try {
-    await page.goto(`${FIXTURE_URL}/${scenario.id}`, { waitUntil: 'networkidle2' });
+    await page.goto(`${STABLE_URL}/${scenario.id}`, { waitUntil: 'networkidle2' });
     await waitFor('recorder to attach', () => page.evaluate(() => !!window.__takaRecorder));
     await scenario.e2e.record(page);
     await sleep(500);
@@ -228,141 +219,82 @@ async function recordScenario(browser, scenario) {
   });
 }
 
-// Run one scenario end to end: record → capture asserts → baseline → stable
-// pass → (optional) regression fail. Each scenario starts in stable mode.
+// Run one scenario end to end: record on the stable fixture → capture asserts →
+// baseline → replay against the STABLE origin (passes) → replay against the
+// REGRESSION origin (fails; this is a cross-origin replay via targetOrigin).
+// Output is buffered and printed as one block so parallel runs stay readable,
+// and the whole scenario is wrapped so one failure can't abort the others.
 async function runScenario(browser, scenario) {
-  step(`Scenario "${scenario.id}" — ${scenario.title}`);
-  await setMode('stable');
-
-  const session = await recordScenario(browser, scenario);
-  ok(`recorded session ${session.id.slice(0, 8)} (${session.events.length} events)`);
-
-  for (const c of scenario.e2e.checks(session.events)) {
-    assert(c.pass, `[${scenario.id}] ${c.label}`, c.pass ? undefined : c.detail);
-  }
-
-  const r1 = await replayAndWait(session.id, `${scenario.id}#baseline`);
-  assert(r1.result?.isBaseline === true, `[${scenario.id}] first replay created a baseline`, {
-    status: r1.test.status,
-    isBaseline: r1.result?.isBaseline,
-  });
-
-  const r2 = await replayAndWait(session.id, `${scenario.id}#stable`);
-  const r2Failed = (r2.result?.diffs ?? []).filter(d => !d.passed);
-  assert(
-    r2.test.status === 'completed' && r2Failed.length === 0,
-    `[${scenario.id}] unchanged replay passes (no failing diffs)`,
-    { status: r2.test.status, failing: r2Failed.length },
-  );
-
-  const wantRegression = scenario.e2e.regression ?? scenario.hasRegression;
-  if (wantRegression) {
-    await setMode('regression');
-    const r3 = await replayAndWait(session.id, `${scenario.id}#regression`);
-    const r3Failed = (r3.result?.diffs ?? []).filter(d => !d.passed);
-    assert(
-      r3.test.status === 'failed' && r3Failed.length >= 1,
-      `[${scenario.id}] regression replay fails (≥1 failing diff)`,
-      { status: r3.test.status, failing: r3Failed.length },
-    );
-    if (r3Failed.length) {
-      const worst = Math.max(...r3Failed.map(d => d.percentageDifference));
-      ok(`[${scenario.id}] largest diff ${(worst * 100).toFixed(1)}% (threshold ${(r3Failed[0].threshold * 100).toFixed(0)}%)`);
+  const lines = [`\n\x1b[36m▶ Scenario "${scenario.id}" — ${scenario.title}\x1b[0m`];
+  let localFails = 0;
+  const okL = m => lines.push(`  \x1b[32m✓\x1b[0m ${m}`);
+  const assertL = (cond, msg, detail) => {
+    if (cond) lines.push(`  \x1b[32m✓\x1b[0m ${msg}`);
+    else {
+      localFails++;
+      lines.push(`  \x1b[31m✗ ${msg}\x1b[0m`);
+      if (detail !== undefined) lines.push(`     ${JSON.stringify(detail, null, 2)?.slice(0, 600)}`);
     }
-    await setMode('stable'); // leave clean for the next scenario
+    return cond;
+  };
+
+  try {
+    const session = await recordScenario(browser, scenario);
+    okL(`recorded session ${session.id.slice(0, 8)} (${session.events.length} events)`);
+
+    for (const c of scenario.e2e.checks(session.events)) {
+      assertL(c.pass, `[${scenario.id}] ${c.label}`, c.pass ? undefined : c.detail);
+    }
+
+    const r1 = await replayAndWait(session.id, `${scenario.id}#baseline`);
+    assertL(r1.result?.isBaseline === true, `[${scenario.id}] first replay created a baseline`, {
+      status: r1.test.status,
+      isBaseline: r1.result?.isBaseline,
+    });
+
+    const r2 = await replayAndWait(session.id, `${scenario.id}#preview`, { targetOrigin: PREVIEW_URL });
+    const r2Failed = (r2.result?.diffs ?? []).filter(d => !d.passed);
+    assertL(
+      r2.test.status === 'completed' && r2Failed.length === 0,
+      `[${scenario.id}] cross-domain replay against the preview origin PASSES`,
+      { status: r2.test.status, failing: r2Failed.length },
+    );
+
+    const wantRegression = scenario.e2e.regression ?? scenario.hasRegression;
+    if (wantRegression) {
+      const r3 = await replayAndWait(session.id, `${scenario.id}#regression`, {
+        targetOrigin: REGRESSION_URL,
+      });
+      const r3Failed = (r3.result?.diffs ?? []).filter(d => !d.passed);
+      assertL(
+        r3.test.status === 'failed' && r3Failed.length >= 1,
+        `[${scenario.id}] replay against the regression origin FAILS (≥1 failing diff)`,
+        { status: r3.test.status, failing: r3Failed.length },
+      );
+      assertL(
+        r3.result?.targetOrigin === REGRESSION_URL,
+        `[${scenario.id}] regression run is cross-origin (target ${REGRESSION_URL})`,
+        { targetOrigin: r3.result?.targetOrigin, sourceOrigin: r3.result?.sourceOrigin },
+      );
+      if (r3Failed.length) {
+        const worst = Math.max(...r3Failed.map(d => d.percentageDifference));
+        okL(`[${scenario.id}] largest diff ${(worst * 100).toFixed(1)}% (threshold ${(r3Failed[0].threshold * 100).toFixed(0)}%)`);
+      }
+    }
+  } catch (e) {
+    localFails++;
+    lines.push(`  \x1b[31m✗ [${scenario.id}] errored: ${e.message}\x1b[0m`);
   }
-}
 
-// ---- cross-origin (preview-environment) validation ------------------------
-// Record-on-A / replay-on-B: prove a session recorded on the primary fixture
-// (:9002) can be replayed against a *different* origin — the "preview" (:9003) —
-// via `targetOrigin`, diffing against the baseline captured on the original
-// origin. Both ports run the same fixture code, so B-stable matches A's
-// baseline (pass), while flipping B to regression yields a failing diff. This
-// reuses the click session recorded in the scenario loop (its baseline was
-// established on A), so it must run after the loop.
-async function crossOriginCheck() {
-  step('Cross-origin replay — recorded on :9002, replayed against :9003 (preview)');
-
-  const { body: list } = await fetchJson(`${API_BASE}/projects/${PROJECT_ID}/sessions?limit=50`);
-  const summary = (list?.sessions || []).find(s => s.url && s.url.endsWith('/click'));
-  if (
-    !assert(
-      !!summary,
-      'found the recorded click session to reuse (baseline captured on :9002)',
-      (list?.sessions || []).map(s => s.url),
-    )
-  ) {
-    return;
-  }
-  const sessionId = summary.id;
-
-  // Both origins render identically in stable mode before the matching replay.
-  await setMode('stable', FIXTURE_URL);
-  await setMode('stable', PREVIEW_URL);
-
-  const pass = await replayAndWait(sessionId, 'xorigin#stable', { targetOrigin: PREVIEW_URL });
-  const passFailing = (pass.result?.diffs ?? []).filter(d => !d.passed);
-  assert(
-    pass.test.status === 'completed' && passFailing.length === 0,
-    'replay against preview (stable) PASSES — rebased nav matched the baseline',
-    { status: pass.test.status, failing: passFailing.length },
-  );
-  assert(
-    pass.result?.targetOrigin === PREVIEW_URL,
-    `test result records target origin = ${PREVIEW_URL}`,
-    { targetOrigin: pass.result?.targetOrigin, sourceOrigin: pass.result?.sourceOrigin },
-  );
-
-  await setMode('regression', PREVIEW_URL);
-  const failr = await replayAndWait(sessionId, 'xorigin#regression', { targetOrigin: PREVIEW_URL });
-  const failFailing = (failr.result?.diffs ?? []).filter(d => !d.passed);
-  assert(
-    failr.test.status === 'failed' && failFailing.length >= 1,
-    'replay against preview (regression) FAILS — visual change detected on the preview',
-    { status: failr.test.status, failing: failFailing.length },
-  );
-  await setMode('stable', PREVIEW_URL); // leave the preview clean
+  failures += localFails;
+  console.log(lines.join('\n'));
 }
 
 // ---- keep-alive (E2E_KEEP=1) ----------------------------------------------
 async function keepAlive() {
-  // Reset the fixture to stable so the page renders normally when opened.
-  try {
-    await fetchJson(`${FIXTURE_URL}/__mode`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: 'stable' }),
-    });
-  } catch {
-    /* fixture may be down; ignore */
-  }
-
-  // Start a dedicated recorder-mode app for manual play. Same scenarios, its own
-  // origin, recording into the same project — so sessions you capture by hand
-  // show up in the dashboard below, ready to replay/test. (The two automated
-  // fixtures are also still up but their modes get toggled by the run.)
-  step('Keep-alive — starting manual recorder app');
-  spawnProc('record', 'node', ['packages/app/test-fixture/server.mjs'], {
-    FIXTURE_PORT: String(RECORD_PORT),
-    TAKA_PROJECT_ID: PROJECT_ID,
-    TAKA_API_ENDPOINT: API_BASE,
-  });
-  try {
-    await waitFor(
-      'manual recorder',
-      async () => {
-        const { status } = await fetchJson(`${RECORD_URL}/health`);
-        return status === 200;
-      },
-      { timeout: 15_000, interval: 500 },
-    );
-    ok('manual recorder ready');
-  } catch {
-    fail('manual recorder did not come up (continuing — the other servers are usable)');
-  }
-
-  // Boot the dashboard (prebuilt by `make e2e`) so there's a real UI to play in.
+  // The three fixed-mode fixtures from the run stay up; the stable one doubles
+  // as the manual record target. Boot the dashboard (prebuilt by `make e2e`) so
+  // there's a real UI to play in.
   step('Keep-alive — starting web dashboard');
   spawnProc('web', 'pnpm', ['--filter', '@taka/web', 'start'], { PORT: String(WEB_PORT) });
   try {
@@ -383,16 +315,17 @@ async function keepAlive() {
 \x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m
 \x1b[32m  servers are up — play around, then press Ctrl+C to tear down\x1b[0m
 \x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m
-  dashboard   ${WEB_URL}/projects/${PROJECT_ID}
-  \x1b[32mrecord →\x1b[0m    ${RECORD_URL}   ← open ${scenarios.map(s => '/' + s.id).join(' or ')} and interact to capture a NEW session
-  fixture     ${FIXTURE_URL}   (the automated run's record source — its sessions are pre-loaded above)
-  preview     ${PREVIEW_URL}   (cross-origin replay target — enter it in the Replay dialog)
-  api         ${API_BASE}
-  project     ${PROJECT_ID}   (pre-loaded: one recorded session + test runs per scenario)
-  data dir    ${dataDir}   (temp — removed on teardown)
+  dashboard    ${WEB_URL}/projects/${PROJECT_ID}
+  \x1b[32mrecord →\x1b[0m     ${STABLE_URL}   ← open ${scenarios.map(s => '/' + s.id).join(' or ')} and interact to capture a NEW session
+  preview      ${PREVIEW_URL}   (good preview — replay against it in the dialog → PASSES)
+  regression   ${REGRESSION_URL}   (regressed preview — replay against it → FAILS)
+  api          ${API_BASE}
+  project      ${PROJECT_ID}   (pre-loaded: one session + test runs per scenario)
+  data dir     ${dataDir}   (temp — removed on teardown)
 
   Manual flow: open the \x1b[32mrecord\x1b[0m URL → click/type → switch to the dashboard →
-  the new session appears under sessions → hit Replay (optionally target ${PREVIEW_URL}).
+  the new session appears under sessions → Replay it, targeting ${PREVIEW_URL}
+  (passes) or ${REGRESSION_URL} (fails) in the Replay dialog.
 
   Ctrl+C to stop everything and clean up.
 `);
@@ -436,29 +369,30 @@ async function main() {
   });
   assert(projStatus === 201 && project?.id === PROJECT_ID, `project "${PROJECT_ID}" created`, project);
 
-  step('Start fixture server');
-  spawnProc('fixture', 'node', ['packages/app/test-fixture/server.mjs'], {
-    FIXTURE_PORT: String(FIXTURE_PORT),
-    TAKA_PROJECT_ID: PROJECT_ID,
-    TAKA_API_ENDPOINT: API_BASE,
-  });
-  await waitFor('fixture health', async () => {
-    const { status } = await fetchJson(`${FIXTURE_URL}/health`);
-    return status === 200;
-  });
-  ok('fixture is healthy');
-
-  step('Start preview fixture (cross-origin replay target)');
-  spawnProc('preview', 'node', ['packages/app/test-fixture/server.mjs'], {
-    FIXTURE_PORT: String(PREVIEW_PORT),
-    TAKA_PROJECT_ID: PROJECT_ID,
-    TAKA_API_ENDPOINT: API_BASE,
-  });
-  await waitFor('preview fixture health', async () => {
-    const { status } = await fetchJson(`${PREVIEW_URL}/health`);
-    return status === 200;
-  });
-  ok('preview fixture is healthy');
+  step('Start fixtures — stable (record/baseline), preview (stable), regression');
+  const startFixture = (label, port, mode) =>
+    spawnProc(label, 'node', ['packages/app/test-fixture/server.mjs'], {
+      FIXTURE_PORT: String(port),
+      FIXTURE_MODE: mode,
+      TAKA_PROJECT_ID: PROJECT_ID,
+      TAKA_API_ENDPOINT: API_BASE,
+    });
+  startFixture('stable', STABLE_PORT, 'stable');
+  startFixture('preview', PREVIEW_PORT, 'stable');
+  startFixture('regression', REGRESSION_PORT, 'regression');
+  await Promise.all(
+    [
+      ['stable', STABLE_URL],
+      ['preview', PREVIEW_URL],
+      ['regression', REGRESSION_URL],
+    ].map(([label, url]) =>
+      waitFor(`${label} fixture health`, async () => {
+        const { status } = await fetchJson(`${url}/health`);
+        return status === 200;
+      }),
+    ),
+  );
+  ok('fixtures are healthy (stable, preview, regression)');
 
   const browser = await puppeteer.launch({
     headless: HEADFUL ? false : 'new',
@@ -466,17 +400,15 @@ async function main() {
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
   try {
-    console.log(`\n  running ${scenarios.length} scenario(s): ${scenarios.map(s => s.id).join(', ')}`);
-    for (const scenario of scenarios) {
-      await runScenario(browser, scenario);
-    }
+    console.log(`\n  running ${scenarios.length} scenario(s) in parallel: ${scenarios.map(s => s.id).join(', ')}`);
+    // Fixed-mode fixtures mean no shared state between scenarios, so they run
+    // concurrently. Each replays cross-domain against preview (pass) + regression
+    // (fail), which is what exercises the cross-origin rebasing — no separate
+    // cross-origin step needed.
+    await Promise.all(scenarios.map(scenario => runScenario(browser, scenario)));
   } finally {
     await browser.close();
   }
-
-  // Cross-origin (preview) validation reuses the recorded click session and
-  // only talks to the API + fixtures, so it runs after the browser is closed.
-  await crossOriginCheck();
 }
 
 main()
