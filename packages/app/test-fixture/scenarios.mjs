@@ -243,6 +243,158 @@ export const scenarios = [
       regression: true,
     },
   },
+
+  {
+    id: 'submit',
+    title: 'Form submit',
+    event: 'submit',
+    description: 'Submitting a form (preventDefault) reveals a result panel; the player reproduces the submit.',
+    css: `
+      #message {
+        font: 16px system-ui, sans-serif;
+        padding: 12px 14px;
+        width: 480px;
+        border: 2px solid #111111;
+        /* Determinism: no blinking caret (the field isn't focused, but be safe). */
+        caret-color: transparent;
+        outline: none;
+      }
+      #submit-btn {
+        display: block;
+        margin-top: 12px;
+        font: 600 16px system-ui, sans-serif;
+        padding: 12px 24px;
+        border: 2px solid #111111;
+        background: #ffffff;
+        color: #111111;
+        cursor: pointer;
+        outline: none; /* no focus ring after the click */
+      }
+      /* Large fixed-size panel so the regression color flip clears the diff threshold. */
+      #result {
+        margin-top: 32px;
+        width: 800px;
+        height: 400px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font: 700 40px system-ui, sans-serif;
+        border: 2px solid #111111;
+        background: #ffffff;
+        color: #111111;
+      }
+    `,
+    body: `
+      <form id="form">
+        <input id="message" name="message" type="text" autocomplete="off" value="ship it" />
+        <button id="submit-btn" type="submit">Submit</button>
+      </form>
+      <div id="result">not submitted</div>
+    `,
+    behavior: `
+      document.getElementById('form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var v = document.getElementById('message').value;
+        document.getElementById('result').textContent = v ? 'submitted: ' + v : 'submitted';
+      });
+    `,
+    regressionCss: `
+      #result { background: #ff0033 !important; color: #ffffff !important; }
+    `,
+    hasRegression: true,
+    e2e: {
+      record: async page => {
+        await page.click('#submit-btn'); // click the submit button → submit(#form)
+      },
+      checks: events => {
+        const submits = events.filter(e => e.type === 'submit');
+        return [
+          {
+            pass: submits.some(e => (e.target || '').includes('form')),
+            label: 'captured a submit on #form',
+            detail: submits.map(e => e.target),
+          },
+        ];
+      },
+      regression: true,
+    },
+  },
+
+  {
+    id: 'scroll',
+    title: 'Scroll the page',
+    event: 'scroll',
+    description: 'Scrolling reveals a below-the-fold panel; the player restores the scroll position so it enters the viewport.',
+    css: `
+      #top {
+        width: 1000px;
+        height: 300px;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font: 700 36px system-ui, sans-serif;
+        border: 2px solid #111111;
+        background: #ffffff;
+        color: #111111;
+      }
+      #spacer {
+        height: 1100px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font: 600 22px system-ui, sans-serif;
+        color: #8a8a8a;
+      }
+      /* #bottom sits below the fold at scrollY=0, so it only enters the (viewport)
+         screenshot after the scroll is replayed. The regression flip therefore
+         produces a diff ONLY if scrolling actually took effect. */
+      #bottom {
+        width: 1000px;
+        height: 600px;
+        margin-top: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font: 700 44px system-ui, sans-serif;
+        border: 2px solid #111111;
+        background: #ffffff;
+        color: #111111;
+      }
+    `,
+    body: `
+      <div id="top">top of page</div>
+      <div id="spacer">↓ scroll down ↓</div>
+      <div id="bottom">bottom panel</div>
+    `,
+    behavior: ``,
+    regressionCss: `
+      #bottom { background: #ff0033 !important; color: #ffffff !important; }
+    `,
+    hasRegression: true,
+    e2e: {
+      record: async page => {
+        // Scroll to the bottom (instant); the player replays the recorded scrollY.
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      },
+      checks: events => {
+        const scrolls = events.filter(e => e.type === 'scroll');
+        return [
+          {
+            pass: scrolls.length > 0,
+            label: 'captured scroll event(s)',
+            detail: scrolls.map(e => e.data),
+          },
+          {
+            pass: scrolls.some(e => (e.data?.scrollY ?? 0) > 100),
+            label: 'scrolled down (scrollY > 100)',
+            detail: scrolls.map(e => e.data && e.data.scrollY),
+          },
+        ];
+      },
+      regression: true,
+    },
+  },
 ];
 
 export function scenarioById(id) {

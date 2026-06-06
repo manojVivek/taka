@@ -23,14 +23,12 @@ Tracks which recorder events / use-cases have a fixture scenario wired through t
 |:---:|----------|------|----------|:---:|:---:|:---:|
 | ✅ | Click reveals text | `/click` | `click` | ✓ | ✓ | ✓ |
 | ✅ | Text input | `/input` | `input` | ✓ | ✓ | ✓ |
-| ⬜ | Form submit | `/submit` | `submit` | – | – | – |
+| ✅ | Form submit | `/submit` | `submit` | ✓ | ✓ | ✓ |
 | ✅ | Focus / blur | `/focus` | `focus`, `blur` | ✓ | ✓ | ✓ |
-| ⬜ | Scroll | `/scroll` | `scroll` | – | – | – |
-| ⬜ | Viewport resize | `/resize` | `resize` | – | – | n/a |
+| ✅ | Scroll | `/scroll` | `scroll` | ✓ | ✓ | ✓ |
 | ⬜ | SPA navigation | `/navigation` | `navigation` | – | – | – |
 | ⬜ | Network capture + mock | `/network` | fetch / XHR | – | – | – |
 | ⬜ | Storage snapshot / auth restore | `/storage` | storage | – | – | n/a |
-| ⬜ | DOM mutation (observed) | via `/click` & others | `mutation` | – | n/a | n/a |
 | ✅ | Cross-origin replay (preview) | record `/click` on :9002, replay on :9003 | `targetOrigin` | n/a | ✓ | ✓ |
 
 ## Usage
@@ -175,6 +173,6 @@ The fixture starts with one scenario (`click`) on purpose — get the pipeline s
 2. **Run `make e2e`** — the new scenario goes through record → baseline → stable-pass → regression-fail with no orchestrator changes needed.
 3. **Tick it off** in the [coverage checklist](#coverage-checklist) above.
 
-> Tip: size any regression panel so the color flip clears the 10% diff threshold with margin (the existing scenarios use an ~800×400 panel ≈ 15–16% of the 1920×1080 screenshot).
+> Tip: the player screenshots the **viewport** (1920×1080), reflecting the current scroll position — not the full page. Size any regression panel so it's a comfortable fraction of the viewport (the scenarios use an ~800–1000px-wide panel ≈ 15–29%) and make sure it's actually on screen in the frame it should affect. For a scroll scenario, put the regression target **below the fold** so it only enters the viewport — and only produces a diff — once the scroll has been replayed.
 
 Because the recorder/player/differ are exercised exactly as in production, a new scenario that records, replays, and diffs here is strong evidence it works for real apps too.

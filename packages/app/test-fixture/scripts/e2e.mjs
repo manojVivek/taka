@@ -29,18 +29,21 @@ import { scenarios } from '../scenarios.mjs';
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..', '..', '..');
 
-const API_PORT = 9001;
-const FIXTURE_PORT = 9002;
+// Ports default to the 9xxx series but are env-overridable, so the e2e can run
+// on an alternate range (e.g. E2E_API_PORT=9101 …) alongside a `make e2e-keep`
+// session that's holding the defaults.
+const API_PORT = Number(process.env.E2E_API_PORT || 9001);
+const FIXTURE_PORT = Number(process.env.E2E_FIXTURE_PORT || 9002);
 // A second fixture instance on another port stands in for a Vercel-style
 // "preview" deployment — the target a recorded session is replayed against to
 // validate it cross-origin. Same server code as the primary fixture.
-const PREVIEW_PORT = 9003;
+const PREVIEW_PORT = Number(process.env.E2E_PREVIEW_PORT || 9003);
 // A dedicated recorder-mode fixture, started only in keep mode (E2E_KEEP), as a
 // manual sandbox: open it in a browser and interact to capture fresh sessions
 // into the project — kept separate from the two fixtures above, whose modes the
 // automated run toggles.
-const RECORD_PORT = 9004;
-const WEB_PORT = 9000;
+const RECORD_PORT = Number(process.env.E2E_RECORD_PORT || 9004);
+const WEB_PORT = Number(process.env.E2E_WEB_PORT || 9000);
 const API_BASE = `http://localhost:${API_PORT}/api`;
 const FIXTURE_URL = `http://localhost:${FIXTURE_PORT}`;
 const PREVIEW_URL = `http://localhost:${PREVIEW_PORT}`;
