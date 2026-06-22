@@ -1,0 +1,61 @@
+{
+  "id": "cf038b21-fcd3-4397-85e5-7a55b147db41",
+  "projectId": "e2e",
+  "sessionId": "3a174f2f-45af-45aa-85e4-f2ee714c0a30",
+  "status": "passed",
+  "screenshots": [
+    {
+      "id": "dd9068ac-4f60-4780-b116-a5e9a99fb931",
+      "sessionId": "3a174f2f-45af-45aa-85e4-f2ee714c0a30",
+      "timestamp": 1782099429337,
+      "path": "0000_initial_1782099429337.png",
+      "eventIndex": 0
+    },
+    {
+      "id": "1bb22536-cc34-448f-8f5c-8311505008a3",
+      "sessionId": "3a174f2f-45af-45aa-85e4-f2ee714c0a30",
+      "timestamp": 1782099429516,
+      "path": "0001_navigation_1782099429516.png",
+      "eventIndex": 1
+    },
+    {
+      "id": "0bfe2b4a-fcfc-4216-ab99-0596ee761b63",
+      "sessionId": "3a174f2f-45af-45aa-85e4-f2ee714c0a30",
+      "timestamp": 1782099430037,
+      "path": "0004_input_1782099430037.png",
+      "eventIndex": 4
+    },
+    {
+      "id": "55a1a1a9-e9e4-4b42-971a-f1fe517cefc8",
+      "sessionId": "3a174f2f-45af-45aa-85e4-f2ee714c0a30",
+      "timestamp": 1782099430375,
+      "path": "0006_input_1782099430375.png",
+      "eventIndex": 6
+    },
+    {
+      "id": "5dfea2d4-8c0b-4d9e-bb84-4e1d5bb0263d",
+      "sessionId": "3a174f2f-45af-45aa-85e4-f2ee714c0a30",
+      "timestamp": 1782099430715,
+      "path": "0008_input_1782099430715.png",
+      "eventIndex": 8
+    },
+    {
+      "id": "f88c0803-dc06-4fa7-96ef-182f91e04ebf",
+      "sessionId": "3a174f2f-45af-45aa-85e4-f2ee714c0a30",
+      "timestamp": 1782099431053,
+      "path": "0010_input_1782099431053.png",
+      "eventIndex": 10
+    },
+    {
+      "id": "89a4ccba-cf3d-4870-840f-38ff4718d577",
+      "sessionId": "3a174f2f-45af-45aa-85e4-f2ee714c0a30",
+      "timestamp": 1782099431079,
+      "path": "0010_final_1782099431079.png",
+      "eventIndex": 10
+    }
+  ],
+  "diffs": [],
+  "createdAt": 1782099428326,
+  "isBaseline": true,
+  "sourceOrigin": "http://localhost:9002"
+}

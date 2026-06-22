@@ -1,0 +1,154 @@
+{
+  "id": "36dadf17-8180-411c-b540-55a4aaf27dae",
+  "projectId": "e2e",
+  "sessionId": "c47e4063-b7fa-4cbb-a424-26170de463e3",
+  "status": "passed",
+  "screenshots": [
+    {
+      "id": "fba94de0-5bb5-4afa-9905-3a40e5869422",
+      "sessionId": "c47e4063-b7fa-4cbb-a424-26170de463e3",
+      "timestamp": 1782099435024,
+      "path": "0000_initial_1782099435024.png",
+      "eventIndex": 0
+    },
+    {
+      "id": "41eae6c6-3e54-48a9-94b0-1c6dfe566df9",
+      "sessionId": "c47e4063-b7fa-4cbb-a424-26170de463e3",
+      "timestamp": 1782099435222,
+      "path": "0001_navigation_1782099435222.png",
+      "eventIndex": 1
+    },
+    {
+      "id": "1c9c95e4-94bf-460c-9396-64e98e370570",
+      "sessionId": "c47e4063-b7fa-4cbb-a424-26170de463e3",
+      "timestamp": 1782099437090,
+      "path": "0004_click_1782099437090.png",
+      "eventIndex": 4
+    },
+    {
+      "id": "fcebaa87-ddb1-4135-8167-de84ef2e49eb",
+      "sessionId": "c47e4063-b7fa-4cbb-a424-26170de463e3",
+      "timestamp": 1782099437296,
+      "path": "0005_submit_1782099437296.png",
+      "eventIndex": 5
+    },
+    {
+      "id": "18435703-cca7-4869-866e-b9ed2d2143a0",
+      "sessionId": "c47e4063-b7fa-4cbb-a424-26170de463e3",
+      "timestamp": 1782099437478,
+      "path": "0006_final_1782099437478.png",
+      "eventIndex": 6
+    }
+  ],
+  "diffs": [
+    {
+      "id": "cd1b96d7-8914-4cd0-b5db-26794dbb52cf",
+      "baseScreenshot": {
+        "id": "1fff67b9-813a-4da8-a4f7-a9c22a21d541",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0000_initial_1782099429788.png",
+        "eventIndex": 0
+      },
+      "headScreenshot": {
+        "id": "ff5de919-66dc-4e16-8fb5-9c9f0fbe3585",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0000_initial_1782099435024.png",
+        "eventIndex": 0
+      },
+      "pixelDifference": 0,
+      "percentageDifference": 0,
+      "threshold": 0.1,
+      "passed": true
+    },
+    {
+      "id": "f4ef5e66-1234-4065-8cdf-3fa728e270a8",
+      "baseScreenshot": {
+        "id": "7eb901b4-106d-4512-a671-a9593c861955",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0001_navigation_1782099429968.png",
+        "eventIndex": 1
+      },
+      "headScreenshot": {
+        "id": "ddc0af70-a07f-4d80-b990-f11fb56adabd",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0001_navigation_1782099435222.png",
+        "eventIndex": 1
+      },
+      "pixelDifference": 0,
+      "percentageDifference": 0,
+      "threshold": 0.1,
+      "passed": true
+    },
+    {
+      "id": "ad666f21-6f3b-4fb5-b304-84d923610365",
+      "baseScreenshot": {
+        "id": "9b9ae7b1-c1d5-41cd-b45c-52dda1c0a1b1",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0004_click_1782099430479.png",
+        "eventIndex": 4
+      },
+      "headScreenshot": {
+        "id": "03c27a15-13f7-49d3-9e11-c99a05527cd1",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0004_click_1782099437090.png",
+        "eventIndex": 4
+      },
+      "pixelDifference": 0,
+      "percentageDifference": 0,
+      "threshold": 0.1,
+      "passed": true
+    },
+    {
+      "id": "6f349bff-4bad-4947-9b4f-8e553508dede",
+      "baseScreenshot": {
+        "id": "07c0d25d-0fac-425f-a483-72f2f1dcf111",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0005_submit_1782099430656.png",
+        "eventIndex": 5
+      },
+      "headScreenshot": {
+        "id": "5c321bc2-a858-4e52-bfad-7b9eacc778d4",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0005_submit_1782099437296.png",
+        "eventIndex": 5
+      },
+      "pixelDifference": 0,
+      "percentageDifference": 0,
+      "threshold": 0.1,
+      "passed": true
+    },
+    {
+      "id": "7382e212-4430-4a7f-a199-dfac6f386c29",
+      "baseScreenshot": {
+        "id": "a683295b-72ab-47e8-a5ff-2a44e3e441cb",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0006_final_1782099430834.png",
+        "eventIndex": 6
+      },
+      "headScreenshot": {
+        "id": "6e749694-6b05-474d-bc54-ccd8d2e141f5",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0006_final_1782099437478.png",
+        "eventIndex": 6
+      },
+      "pixelDifference": 0,
+      "percentageDifference": 0,
+      "threshold": 0.1,
+      "passed": true
+    }
+  ],
+  "createdAt": 1782099431106,
+  "isBaseline": false,
+  "targetOrigin": "http://localhost:9003",
+  "sourceOrigin": "http://localhost:9002"
+}

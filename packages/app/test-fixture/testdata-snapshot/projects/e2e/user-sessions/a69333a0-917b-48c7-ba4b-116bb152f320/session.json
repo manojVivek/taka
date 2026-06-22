@@ -1,0 +1,84 @@
+{
+  "id": "a69333a0-917b-48c7-ba4b-116bb152f320",
+  "url": "http://localhost:9002/focus",
+  "timestamp": 1782099425662,
+  "events": [
+    {
+      "id": "1e19fb76-0519-454a-948a-a7a39f3ee54c",
+      "timestamp": 1782099425665,
+      "type": "navigation",
+      "data": {
+        "url": "http://localhost:9002/focus",
+        "title": "Taka fixture · Focus moves between fields",
+        "referrer": "",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+        "viewport": {
+          "width": 1280,
+          "height": 800
+        },
+        "timestamp": 1782099425665
+      }
+    },
+    {
+      "id": "43d3b836-82c4-4129-b103-9b70c61ba3d6",
+      "timestamp": 1782099428585,
+      "type": "focus",
+      "target": "#field-a"
+    },
+    {
+      "id": "e266be4f-f7fb-4632-9e43-7ce328a293f3",
+      "timestamp": 1782099428591,
+      "type": "mousemove",
+      "data": {
+        "x": 280,
+        "y": 173
+      }
+    },
+    {
+      "id": "0e3192ce-59bb-4333-a90b-e7b4e0191646",
+      "timestamp": 1782099428591,
+      "type": "blur",
+      "target": "#field-a"
+    },
+    {
+      "id": "c0c45fc8-6e21-4f7a-b971-3bc3d7024e17",
+      "timestamp": 1782099428591,
+      "type": "focus",
+      "target": "#field-b"
+    },
+    {
+      "id": "4c34dbe8-9951-45f5-85b2-2f7919b1b7f6",
+      "timestamp": 1782099428591,
+      "type": "click",
+      "target": "#field-b",
+      "data": {
+        "x": 280,
+        "y": 173,
+        "button": 0,
+        "ctrlKey": false,
+        "shiftKey": false,
+        "altKey": false,
+        "metaKey": false
+      }
+    }
+  ],
+  "networkRequests": [],
+  "storageSnapshot": {
+    "localStorage": {},
+    "sessionStorage": {},
+    "cookies": {}
+  },
+  "metadata": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "url": "http://localhost:9002/focus",
+    "title": "Taka fixture · Focus moves between fields",
+    "recordingDuration": 3005
+  },
+  "projectId": "e2e",
+  "hasBaseline": true,
+  "baselineTestId": "e8f1cee1-4cf4-445f-9ee3-19968facbea3"
+}

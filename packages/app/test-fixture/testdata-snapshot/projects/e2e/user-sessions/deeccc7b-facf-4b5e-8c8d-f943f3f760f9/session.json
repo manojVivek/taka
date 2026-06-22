@@ -1,0 +1,91 @@
+{
+  "id": "deeccc7b-facf-4b5e-8c8d-f943f3f760f9",
+  "url": "http://localhost:9002/click",
+  "timestamp": 1782099425659,
+  "events": [
+    {
+      "id": "908b5270-90f0-4572-98bc-a0755401d17f",
+      "timestamp": 1782099425663,
+      "type": "navigation",
+      "data": {
+        "url": "http://localhost:9002/click",
+        "title": "Taka fixture · Click reveals text",
+        "referrer": "",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+        "viewport": {
+          "width": 1280,
+          "height": 800
+        },
+        "timestamp": 1782099425663
+      }
+    },
+    {
+      "id": "af342f75-70ce-480c-8829-87e712ec7613",
+      "timestamp": 1782099429603,
+      "type": "mousemove",
+      "data": {
+        "x": 97,
+        "y": 118
+      }
+    },
+    {
+      "id": "234657ca-772f-4bc3-9831-9daf0d661906",
+      "timestamp": 1782099429604,
+      "type": "focus",
+      "target": "#action-btn"
+    },
+    {
+      "id": "50d27103-f235-41b4-9d26-2506eddf48e5",
+      "timestamp": 1782099429604,
+      "type": "click",
+      "target": "#action-btn",
+      "data": {
+        "x": 97,
+        "y": 118,
+        "button": 0,
+        "ctrlKey": false,
+        "shiftKey": false,
+        "altKey": false,
+        "metaKey": false
+      }
+    },
+    {
+      "id": "ea2503ec-f8d0-440d-ace1-3b3c1fb712b6",
+      "timestamp": 1782099429604,
+      "type": "mutation",
+      "data": {
+        "mutations": [
+          {
+            "type": "childList",
+            "target": "#output",
+            "addedNodes": [
+              "Hello, Taka!"
+            ],
+            "removedNodes": [],
+            "attributeName": null,
+            "oldValue": null
+          }
+        ]
+      }
+    }
+  ],
+  "networkRequests": [],
+  "storageSnapshot": {
+    "localStorage": {},
+    "sessionStorage": {},
+    "cookies": {}
+  },
+  "metadata": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "url": "http://localhost:9002/click",
+    "title": "Taka fixture · Click reveals text",
+    "recordingDuration": 4475
+  },
+  "projectId": "e2e",
+  "hasBaseline": true,
+  "baselineTestId": "59416be2-61c7-4af4-b4fd-e659e28a0bb5"
+}

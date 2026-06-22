@@ -25,9 +25,25 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
 import { scenarios } from '../scenarios.mjs';
+import {
+  validateSessionData,
+  validateBaselineRun,
+  validateComparisonRun,
+  measureRedRatio,
+} from './validate.mjs';
+import {
+  collectCleaned,
+  mirrorRawSnapshot,
+  hasSnapshot,
+  compareSnapshots,
+} from './snapshot.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..', '..', '..');
+// Committed golden of the run's storage layout — a RAW mirror of the session/
+// result files (see snapshot.mjs); the comparator normalizes both sides at
+// compare time. Regenerate wholesale with `make e2e-update-snapshot`.
+const SNAPSHOT_DIR = resolve(__dirname, '..', 'testdata-snapshot');
 
 // Ports default to the 9xxx series but are env-overridable, so the e2e can run
 // on an alternate range (e.g. E2E_API_PORT=9101 …) alongside a `make e2e-keep`
@@ -238,6 +254,38 @@ async function runScenario(browser, scenario) {
     return cond;
   };
 
+  // Feed validator results (validate.mjs) through the same assert helper.
+  const runChecks = checks => {
+    for (const c of checks) assertL(c.pass, `[${scenario.id}] ${c.label}`, c.pass ? undefined : c.detail);
+  };
+  const finalShotUrl = result => {
+    const last = result?.screenshots?.[result.screenshots.length - 1];
+    return last
+      ? `${API_BASE}/projects/${PROJECT_ID}/test-sessions/${result.id}/screenshots/${last.path}`
+      : null;
+  };
+  // Independent pixel probe on a run's final frame: the regression run must
+  // actually render the fixture's red panel, the preview run must not. Does
+  // not consult the differ, so it catches a differ that "passes everything".
+  const probeRed = async (result, { expectRed }) => {
+    const url = finalShotUrl(result);
+    let ratio = null;
+    let probeError = url ? null : 'no screenshots in result';
+    if (url) {
+      try {
+        ratio = await measureRedRatio(url);
+      } catch (e) {
+        probeError = e instanceof Error ? e.message : String(e);
+      }
+    }
+    const pct = ratio == null ? `unmeasurable: ${probeError}` : `${(ratio * 100).toFixed(1)}% red`;
+    assertL(
+      ratio != null && (expectRed ? ratio > 0.05 : ratio < 0.02),
+      `[${scenario.id}] visual probe: final frame ${expectRed ? 'shows the regression red' : 'has no regression red'} (${pct})`,
+      { ratio, probeError, url },
+    );
+  };
+
   try {
     const session = await recordScenario(browser, scenario);
     okL(`recorded session ${session.id.slice(0, 8)} (${session.events.length} events)`);
@@ -245,12 +293,21 @@ async function runScenario(browser, scenario) {
     for (const c of scenario.e2e.checks(session.events)) {
       assertL(c.pass, `[${scenario.id}] ${c.label}`, c.pass ? undefined : c.detail);
     }
+    runChecks(validateSessionData(session));
 
     const r1 = await replayAndWait(session.id, `${scenario.id}#baseline`);
     assertL(r1.result?.isBaseline === true, `[${scenario.id}] first replay created a baseline`, {
       status: r1.test.status,
       isBaseline: r1.result?.isBaseline,
     });
+    const baseline = await validateBaselineRun({
+      apiBase: API_BASE,
+      projectId: PROJECT_ID,
+      sessionId: session.id,
+      testId: r1.testId,
+      result: r1.result,
+    });
+    runChecks(baseline.checks);
 
     const r2 = await replayAndWait(session.id, `${scenario.id}#preview`, { targetOrigin: PREVIEW_URL });
     const r2Failed = (r2.result?.diffs ?? []).filter(d => !d.passed);
@@ -259,6 +316,18 @@ async function runScenario(browser, scenario) {
       `[${scenario.id}] cross-domain replay against the preview origin PASSES`,
       { status: r2.test.status, failing: r2Failed.length },
     );
+    runChecks(
+      await validateComparisonRun({
+        apiBase: API_BASE,
+        projectId: PROJECT_ID,
+        testId: r2.testId,
+        sessionId: session.id,
+        result: r2.result,
+        baseline,
+        expectFailures: false,
+      }),
+    );
+    await probeRed(r2.result, { expectRed: false });
 
     const wantRegression = scenario.e2e.regression ?? scenario.hasRegression;
     if (wantRegression) {
@@ -276,6 +345,18 @@ async function runScenario(browser, scenario) {
         `[${scenario.id}] regression run is cross-origin (target ${REGRESSION_URL})`,
         { targetOrigin: r3.result?.targetOrigin, sourceOrigin: r3.result?.sourceOrigin },
       );
+      runChecks(
+        await validateComparisonRun({
+          apiBase: API_BASE,
+          projectId: PROJECT_ID,
+          testId: r3.testId,
+          sessionId: session.id,
+          result: r3.result,
+          baseline,
+          expectFailures: true,
+        }),
+      );
+      await probeRed(r3.result, { expectRed: true });
       if (r3Failed.length) {
         const worst = Math.max(...r3Failed.map(d => d.percentageDifference));
         okL(`[${scenario.id}] largest diff ${(worst * 100).toFixed(1)}% (threshold ${(r3Failed[0].threshold * 100).toFixed(0)}%)`);
@@ -408,6 +489,25 @@ async function main() {
     await Promise.all(scenarios.map(scenario => runScenario(browser, scenario)));
   } finally {
     await browser.close();
+  }
+
+  step('Test-data snapshot — comparison against the committed raw golden');
+  if (process.env.E2E_UPDATE_SNAPSHOT === '1') {
+    mirrorRawSnapshot(dataDir, SNAPSHOT_DIR, { projectId: PROJECT_ID });
+    ok(`raw snapshot updated → ${SNAPSHOT_DIR} (regenerated wholesale — commit it)`);
+  } else if (!hasSnapshot(SNAPSHOT_DIR, PROJECT_ID)) {
+    fail(`no committed snapshot at ${SNAPSHOT_DIR} — run "make e2e-update-snapshot" and commit it`);
+  } else {
+    // Normalize BOTH the raw golden and the raw live tree, then deep-compare.
+    const opts = { projectId: PROJECT_ID, previewUrl: PREVIEW_URL, regressionUrl: REGRESSION_URL };
+    const golden = collectCleaned(SNAPSHOT_DIR, opts);
+    const live = collectCleaned(dataDir, opts);
+    const mismatches = compareSnapshots(golden, live);
+    assert(
+      mismatches.length === 0,
+      `storage layout matches the committed snapshot (${Object.keys(live).length} entities)`,
+      mismatches.slice(0, 25),
+    );
   }
 }
 

@@ -1,0 +1,99 @@
+{
+  "id": "c47e4063-b7fa-4cbb-a424-26170de463e3",
+  "url": "http://localhost:9002/submit",
+  "timestamp": 1782099425661,
+  "events": [
+    {
+      "id": "32b227de-563d-43c9-9976-9e420970a32e",
+      "timestamp": 1782099425664,
+      "type": "navigation",
+      "data": {
+        "url": "http://localhost:9002/submit",
+        "title": "Taka fixture · Form submit",
+        "referrer": "",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+        "viewport": {
+          "width": 1280,
+          "height": 800
+        },
+        "timestamp": 1782099425664
+      }
+    },
+    {
+      "id": "e46922fb-6b41-44c4-b0e3-331c86a6fa7a",
+      "timestamp": 1782099427549,
+      "type": "mousemove",
+      "data": {
+        "x": 93,
+        "y": 171
+      }
+    },
+    {
+      "id": "91d871d9-5d1d-470f-afa5-949e10c82370",
+      "timestamp": 1782099427549,
+      "type": "focus",
+      "target": "#submit-btn"
+    },
+    {
+      "id": "17d9adac-592e-4454-9dd5-95a6f659c716",
+      "timestamp": 1782099427549,
+      "type": "click",
+      "target": "#submit-btn",
+      "data": {
+        "x": 93,
+        "y": 171,
+        "button": 0,
+        "ctrlKey": false,
+        "shiftKey": false,
+        "altKey": false,
+        "metaKey": false
+      }
+    },
+    {
+      "id": "57d7ae27-89dc-448f-9283-963a83e1d2af",
+      "timestamp": 1782099427549,
+      "type": "submit",
+      "target": "#form"
+    },
+    {
+      "id": "d9f3bda3-6e50-44f9-ae45-edb23cac9858",
+      "timestamp": 1782099427549,
+      "type": "mutation",
+      "data": {
+        "mutations": [
+          {
+            "type": "childList",
+            "target": "#result",
+            "addedNodes": [
+              "submitted: ship it"
+            ],
+            "removedNodes": [
+              "not submitted"
+            ],
+            "attributeName": null,
+            "oldValue": null
+          }
+        ]
+      }
+    }
+  ],
+  "networkRequests": [],
+  "storageSnapshot": {
+    "localStorage": {},
+    "sessionStorage": {},
+    "cookies": {}
+  },
+  "metadata": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "url": "http://localhost:9002/submit",
+    "title": "Taka fixture · Form submit",
+    "recordingDuration": 2419
+  },
+  "projectId": "e2e",
+  "hasBaseline": true,
+  "baselineTestId": "a798e651-ef1a-46c8-8bb2-df54cbac28b1"
+}

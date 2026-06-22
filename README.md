@@ -88,6 +88,7 @@ The project ships a `Makefile` with common operations. Always prefer these over 
 | `make e2e` | Hermetic end-to-end test (record → baseline → pass → regression-fail) |
 | `make e2e-headful` | Same, with a visible browser for debugging |
 | `make e2e-keep` | Run the flow, then leave API + the 3 fixed-mode fixtures + dashboard up to explore (Ctrl+C to tear down) |
+| `make e2e-update-snapshot` | Regenerate the committed e2e test-data snapshot (`testdata-snapshot/`) after an intentional behavior change |
 | `make fixture` | Run the test fixture standalone on :9002 for manual recording |
 | `make kill` | Kill dev/e2e ports (9000–9004) |
 | `make health` | Check API health endpoint |

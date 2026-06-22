@@ -1,0 +1,47 @@
+{
+  "id": "a798e651-ef1a-46c8-8bb2-df54cbac28b1",
+  "projectId": "e2e",
+  "sessionId": "c47e4063-b7fa-4cbb-a424-26170de463e3",
+  "status": "passed",
+  "screenshots": [
+    {
+      "id": "2b6601f0-0495-4690-a979-a3ccb3a3af23",
+      "sessionId": "c47e4063-b7fa-4cbb-a424-26170de463e3",
+      "timestamp": 1782099429788,
+      "path": "0000_initial_1782099429788.png",
+      "eventIndex": 0
+    },
+    {
+      "id": "7bf026ac-26ca-4b0d-952c-eed717ef40af",
+      "sessionId": "c47e4063-b7fa-4cbb-a424-26170de463e3",
+      "timestamp": 1782099429968,
+      "path": "0001_navigation_1782099429968.png",
+      "eventIndex": 1
+    },
+    {
+      "id": "74331fa6-4ce4-4e1d-82b9-59c191dd95c3",
+      "sessionId": "c47e4063-b7fa-4cbb-a424-26170de463e3",
+      "timestamp": 1782099430479,
+      "path": "0004_click_1782099430479.png",
+      "eventIndex": 4
+    },
+    {
+      "id": "807e5be1-94fb-49fa-bd97-fabfe62a2771",
+      "sessionId": "c47e4063-b7fa-4cbb-a424-26170de463e3",
+      "timestamp": 1782099430656,
+      "path": "0005_submit_1782099430656.png",
+      "eventIndex": 5
+    },
+    {
+      "id": "a44857d2-4f73-462a-b944-9f130e41e50d",
+      "sessionId": "c47e4063-b7fa-4cbb-a424-26170de463e3",
+      "timestamp": 1782099430834,
+      "path": "0006_final_1782099430834.png",
+      "eventIndex": 6
+    }
+  ],
+  "diffs": [],
+  "createdAt": 1782099428589,
+  "isBaseline": true,
+  "sourceOrigin": "http://localhost:9002"
+}

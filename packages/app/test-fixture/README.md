@@ -8,8 +8,23 @@ A minimal, deterministic recording target plus a hermetic end-to-end test for th
 - **`server.mjs`** — a tiny Express server that renders one page per scenario at `/<id>` (e.g. `/click`), an index at `/`, and serves the recorder's standalone IIFE bundle at `/recorder.js`. Its render mode is **fixed at startup** via the `FIXTURE_MODE` env var (`stable` | `regression`).
 - **Fixed-mode origins (no runtime flag)** — run one instance in `stable` mode and one in `regression` mode on different ports. The regression instance bakes in each scenario's `regressionCss` (e.g. the panel turns red — same elements/dimensions, only styling changes). Replaying a recorded session against a stable origin **passes** (matches its baseline); against the regression origin it **fails** (a large, unambiguous diff). No shared mutable state means scenarios run in parallel, and you validate by origin: point replays at the stable origin → all pass, at the regression origin → all fail.
 - **`scripts/e2e.mjs`** — a self-contained orchestrator that spawns its own API + **three fixed-mode fixtures** (stable, preview, regression) + Chrome, records each scenario on the stable origin, then replays it **cross-domain** against the preview origin (expect pass) and the regression origin (expect fail) — all scenarios in parallel.
+- **`scripts/validate.mjs`** — artifact-level validators the e2e runs after every replay. The behavioral assertions trust the API's reports; these independently verify the artifacts behind them (see below).
 
 Each scenario lives on its own page so cases stay isolated and easy to manage — a flaky or in-progress scenario never blocks the others.
+
+## Validation layers
+
+Every scenario is checked at five levels, so a pipeline bug can't hide behind a self-reported "passed":
+
+1. **Behavioral** (`e2e.mjs`) — events reached the API, first replay created a baseline, the preview replay passes, the regression replay fails with ≥1 failing diff.
+2. **Shape** (`validate.mjs`) — required fields on the session JSON (id/url/timestamp, per-event id+type+timestamp, unique event ids, metadata, storage snapshot) and on every test result (terminal status, screenshots with path+eventIndex, diffs array).
+3. **Artifacts** (`validate.mjs`) — the session is flagged `hasBaseline` with a matching `baselineTestId` *and* real files exist behind the flag; the baseline file listing matches the run's claim; every baseline/head/diff PNG fetches over the blob API as a valid PNG; all frames share one resolution and head resolution matches baseline; head frame count matches baseline 1:1; every baseline frame was compared; the persisted `report.json` parses and is internally consistent (`passed + failed = total`, zero failures for preview, ≥1 for regression, every failing frame names a fetchable diff image).
+4. **Visual probe** (`validate.mjs`) — a from-scratch PNG decode in Node (no differ, no browser) measures the fraction of regression-red (`#ff0033`) pixels in each run's final frame: the regression run must actually show the red panel (>5%), the preview run must not (<2%). This is an independent oracle — a differ that "passes everything" or a replay that silently rendered the wrong origin cannot fool it.
+5. **Test-data snapshot** (`snapshot.mjs` + committed `testdata-snapshot/` folder) — after all scenarios finish, the run's storage tree is compared against a committed golden. The design is **dumb dataset, smart comparator**: the golden is a *raw* copy of the `session.json` / `result.json` files a run writes — original uuids, timestamps, and directory names left untouched — and all the intelligence lives in `collectCleaned()`, which reads a storage tree (golden **or** live) and normalizes it on the fly before a deep-compare. This anchors **cross-run determinism**: layers 1–4 are self-referential within a run, while the snapshot catches drift between runs and across refactors. It pins `events[].{type,target,data}` (so a wrong selector, dropped typed value, broken redaction, or changed DOM-mutation text is caught), metadata, the captured storage state (localStorage/sessionStorage/cookies), network shape, the screenshot frame set, and every run's `status` + per-frame `passed`/`threshold` verdict.
+
+   Normalization at compare time is a **denylist** applied to both sides: sessions are keyed by URL path and results by replay label (baseline/preview/regression), then every field is compared *except* the ones that legitimately change each run/machine — ids, all timestamps, `recordingDuration`, `userAgent`, env-overridable origins, font-dependent geometry (`x`/`y`/scroll/document extents), and exact diff magnitudes (only the pass/fail verdict + threshold survive). URLs reduce to their path and screenshot filenames lose their trailing timestamp. So a re-run — same machine, and by design a different one — compares equal unless real behavior changed. (Results map to their session by `result.sessionId === session.id`, which always holds in a real run; a refactor that broke that linkage would surface as a "missing" entity, which is the correct signal.)
+
+   **Why a raw golden + smart comparator rather than a pre-cleaned one:** the dataset stays dumb — regenerating it is a verbatim copy with nothing to curate, and there's no write-time transform that could silently drop a field from coverage; whatever the run writes is what's pinned. The cost, accepted by design: because the golden keeps raw uuids/timestamps, `make e2e-update-snapshot` rewrites every file, so the golden's git diff is **not** meaningful — treat it as an opaque blob you regenerate wholesale and trust the comparator to validate, not something reviewed field-by-field. (Only `session.json`/`result.json` are copied — not PNGs, which can't be byte-compared across machines and whose validity is already checked at runtime by layer 3.)
 
 ## Coverage checklist
 
@@ -34,10 +49,11 @@ Tracks which recorder events / use-cases have a fixture scenario wired through t
 ## Usage
 
 ```bash
-make e2e           # full hermetic test (build + record + cross-domain pass/fail replays), tears down
-make e2e-headful   # same, with a visible browser (E2E_HEADFUL=1)
-make e2e-keep      # run the flow, then leave API + the 3 fixtures + dashboard up to explore
-make fixture       # run a stable fixture standalone on :9002 for manual recording
+make e2e                  # full hermetic test (build + record + cross-domain pass/fail replays), tears down
+make e2e-headful          # same, with a visible browser (E2E_HEADFUL=1)
+make e2e-keep             # run the flow, then leave API + the 3 fixtures + dashboard up to explore
+make e2e-update-snapshot  # regenerate the testdata-snapshot/ folder after an intentional behavior change
+make fixture              # run a stable fixture standalone on :9002 for manual recording
 ```
 
 - **`make e2e`** is the gate: exit code 0 means the whole pipeline is healthy. Run it after any change to the recorder, player, differ, storage, or API. It runs all scenarios **in parallel** against three fixed-mode origins (stable `:9002`, preview `:9003`, regression `:9004`).

@@ -1,0 +1,53 @@
+{
+  "id": "c2fd8bc4-5e1b-45a1-a2b1-0dc946528cf5",
+  "url": "http://localhost:9002/scroll",
+  "timestamp": 1782099425661,
+  "events": [
+    {
+      "id": "1eeba3d2-94a6-4ec8-ad01-7727bb34965e",
+      "timestamp": 1782099425665,
+      "type": "navigation",
+      "data": {
+        "url": "http://localhost:9002/scroll",
+        "title": "Taka fixture · Scroll the page",
+        "referrer": "",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+        "viewport": {
+          "width": 1280,
+          "height": 800
+        },
+        "timestamp": 1782099425665
+      }
+    },
+    {
+      "id": "2c6af8b6-d77d-40c2-ad6a-32053c190f90",
+      "timestamp": 1782099426527,
+      "type": "scroll",
+      "data": {
+        "scrollX": 0,
+        "scrollY": 1378,
+        "documentHeight": 2178,
+        "documentWidth": 1280
+      }
+    }
+  ],
+  "networkRequests": [],
+  "storageSnapshot": {
+    "localStorage": {},
+    "sessionStorage": {},
+    "cookies": {}
+  },
+  "metadata": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "url": "http://localhost:9002/scroll",
+    "title": "Taka fixture · Scroll the page",
+    "recordingDuration": 1369
+  },
+  "projectId": "e2e",
+  "hasBaseline": true,
+  "baselineTestId": "28218729-b59c-4795-925c-ae3f1dc04044"
+}

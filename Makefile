@@ -1,4 +1,4 @@
-.PHONY: install build dev start stop clean reset migrate-data test lint kill fixture e2e e2e-headful e2e-keep
+.PHONY: install build dev start stop clean reset migrate-data test lint kill fixture e2e e2e-headful e2e-keep e2e-update-snapshot
 
 # Install dependencies
 install:
@@ -40,6 +40,12 @@ e2e: build
 # Same, but with a visible browser for debugging.
 e2e-headful: build
 	E2E_HEADFUL=1 node packages/app/test-fixture/scripts/e2e.mjs
+
+# Regenerate the committed storage snapshot — a raw golden, rewritten wholesale
+# (its git diff is noise by design; the comparator normalizes at compare time).
+# Run after an intentional behavior change, then commit testdata-snapshot/.
+e2e-update-snapshot: build
+	E2E_UPDATE_SNAPSHOT=1 node packages/app/test-fixture/scripts/e2e.mjs
 
 # Run the flow, then leave API + the 3 fixtures + dashboard up to play with.
 # Ctrl+C tears everything down and cleans the temp data dir.

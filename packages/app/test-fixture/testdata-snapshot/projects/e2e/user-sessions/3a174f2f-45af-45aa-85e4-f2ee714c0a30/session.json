@@ -1,0 +1,170 @@
+{
+  "id": "3a174f2f-45af-45aa-85e4-f2ee714c0a30",
+  "url": "http://localhost:9002/input",
+  "timestamp": 1782099425660,
+  "events": [
+    {
+      "id": "9bd01367-7001-4f8d-8d83-a1d291cc9235",
+      "timestamp": 1782099425663,
+      "type": "navigation",
+      "data": {
+        "url": "http://localhost:9002/input",
+        "title": "Taka fixture · Text input echoes",
+        "referrer": "",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+        "viewport": {
+          "width": 1280,
+          "height": 800
+        },
+        "timestamp": 1782099425663
+      }
+    },
+    {
+      "id": "9482de02-27f2-4698-abbf-c75f5d9eaefc",
+      "timestamp": 1782099427181,
+      "type": "focus",
+      "target": "#text-input"
+    },
+    {
+      "id": "a957bb1b-d74c-4d3e-b730-185441cf487a",
+      "timestamp": 1782099427182,
+      "type": "mutation",
+      "data": {
+        "mutations": [
+          {
+            "type": "childList",
+            "target": "#echo",
+            "addedNodes": [
+              "you typed: t"
+            ],
+            "removedNodes": [],
+            "attributeName": null,
+            "oldValue": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "a4fd89b5-87fb-4d02-a3ef-9e0c06014a32",
+      "timestamp": 1782099427182,
+      "type": "input",
+      "target": "#text-input",
+      "data": {
+        "value": "t",
+        "type": "text"
+      }
+    },
+    {
+      "id": "b1b27bc6-11cf-4412-9d54-f8b1a0cee889",
+      "timestamp": 1782099427216,
+      "type": "mutation",
+      "data": {
+        "mutations": [
+          {
+            "type": "childList",
+            "target": "#echo",
+            "addedNodes": [
+              "you typed: ta"
+            ],
+            "removedNodes": [
+              "you typed: t"
+            ],
+            "attributeName": null,
+            "oldValue": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "c3be4ffb-b98d-45f3-b031-a44e6a247c3d",
+      "timestamp": 1782099427216,
+      "type": "input",
+      "target": "#text-input",
+      "data": {
+        "value": "ta",
+        "type": "text"
+      }
+    },
+    {
+      "id": "a64caff5-a91b-4af0-b4d4-f1c67ae2bc73",
+      "timestamp": 1782099427248,
+      "type": "mutation",
+      "data": {
+        "mutations": [
+          {
+            "type": "childList",
+            "target": "#echo",
+            "addedNodes": [
+              "you typed: tak"
+            ],
+            "removedNodes": [
+              "you typed: ta"
+            ],
+            "attributeName": null,
+            "oldValue": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "e6e1ad22-3f8b-45f0-8dbb-95bfc5c81136",
+      "timestamp": 1782099427248,
+      "type": "input",
+      "target": "#text-input",
+      "data": {
+        "value": "tak",
+        "type": "text"
+      }
+    },
+    {
+      "id": "f9b5ed3a-1baa-42ca-9f4f-421c54ae8d0e",
+      "timestamp": 1782099427281,
+      "type": "mutation",
+      "data": {
+        "mutations": [
+          {
+            "type": "childList",
+            "target": "#echo",
+            "addedNodes": [
+              "you typed: taka"
+            ],
+            "removedNodes": [
+              "you typed: tak"
+            ],
+            "attributeName": null,
+            "oldValue": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "f6022ab9-b210-4126-aafb-756a771c7a1c",
+      "timestamp": 1782099427281,
+      "type": "input",
+      "target": "#text-input",
+      "data": {
+        "value": "taka",
+        "type": "text"
+      }
+    }
+  ],
+  "networkRequests": [],
+  "storageSnapshot": {
+    "localStorage": {},
+    "sessionStorage": {},
+    "cookies": {}
+  },
+  "metadata": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "url": "http://localhost:9002/input",
+    "title": "Taka fixture · Text input echoes",
+    "recordingDuration": 2156
+  },
+  "projectId": "e2e",
+  "hasBaseline": true,
+  "baselineTestId": "cf038b21-fcd3-4397-85e5-7a55b147db41"
+}

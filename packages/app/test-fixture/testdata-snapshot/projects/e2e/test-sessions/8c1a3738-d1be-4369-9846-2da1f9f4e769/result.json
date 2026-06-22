@@ -1,0 +1,98 @@
+{
+  "id": "8c1a3738-d1be-4369-9846-2da1f9f4e769",
+  "projectId": "e2e",
+  "sessionId": "c2fd8bc4-5e1b-45a1-a2b1-0dc946528cf5",
+  "status": "passed",
+  "screenshots": [
+    {
+      "id": "3a606d1c-92e5-41da-860d-e68500887df0",
+      "sessionId": "c2fd8bc4-5e1b-45a1-a2b1-0dc946528cf5",
+      "timestamp": 1782099431881,
+      "path": "0000_initial_1782099431881.png",
+      "eventIndex": 0
+    },
+    {
+      "id": "5d823c3a-98cb-421f-9851-634fb55a577d",
+      "sessionId": "c2fd8bc4-5e1b-45a1-a2b1-0dc946528cf5",
+      "timestamp": 1782099432072,
+      "path": "0001_navigation_1782099432072.png",
+      "eventIndex": 1
+    },
+    {
+      "id": "7c70a31b-27ad-40a5-9791-68ba733cc93f",
+      "sessionId": "c2fd8bc4-5e1b-45a1-a2b1-0dc946528cf5",
+      "timestamp": 1782099432272,
+      "path": "0002_final_1782099432272.png",
+      "eventIndex": 2
+    }
+  ],
+  "diffs": [
+    {
+      "id": "e5145478-3766-40bc-9a35-721e281e61df",
+      "baseScreenshot": {
+        "id": "6f11ccb7-08e0-4cf0-8ddf-7e8ff16338b7",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0000_initial_1782099428374.png",
+        "eventIndex": 0
+      },
+      "headScreenshot": {
+        "id": "a108e162-22e9-4cfe-8f0a-0bec07be275c",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0000_initial_1782099431881.png",
+        "eventIndex": 0
+      },
+      "pixelDifference": 0,
+      "percentageDifference": 0,
+      "threshold": 0.1,
+      "passed": true
+    },
+    {
+      "id": "2b676325-18c7-490d-babf-379d50b0ea9c",
+      "baseScreenshot": {
+        "id": "508fd101-d292-4642-ae37-f03747bdbd61",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0001_navigation_1782099428572.png",
+        "eventIndex": 1
+      },
+      "headScreenshot": {
+        "id": "c148b1a2-a481-443f-b1a0-731efed4198a",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0001_navigation_1782099432072.png",
+        "eventIndex": 1
+      },
+      "pixelDifference": 0,
+      "percentageDifference": 0,
+      "threshold": 0.1,
+      "passed": true
+    },
+    {
+      "id": "4f997681-64df-433a-9725-51b3569d1047",
+      "baseScreenshot": {
+        "id": "e33b799b-a78f-49f5-a8e0-b9eda24ebab9",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0002_final_1782099428749.png",
+        "eventIndex": 2
+      },
+      "headScreenshot": {
+        "id": "e8325aea-b540-4bd7-a5d9-edf76f447cd3",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0002_final_1782099432272.png",
+        "eventIndex": 2
+      },
+      "pixelDifference": 0,
+      "percentageDifference": 0,
+      "threshold": 0.1,
+      "passed": true
+    }
+  ],
+  "createdAt": 1782099429065,
+  "isBaseline": false,
+  "targetOrigin": "http://localhost:9003",
+  "sourceOrigin": "http://localhost:9002"
+}

@@ -1,0 +1,210 @@
+{
+  "id": "a4c421b4-ab6c-47c1-9d29-76c2e22264b5",
+  "projectId": "e2e",
+  "sessionId": "3a174f2f-45af-45aa-85e4-f2ee714c0a30",
+  "status": "failed",
+  "screenshots": [
+    {
+      "id": "a7e95fa4-4a88-4ba8-8f3e-f4739cbcc7ac",
+      "sessionId": "3a174f2f-45af-45aa-85e4-f2ee714c0a30",
+      "timestamp": 1782099441682,
+      "path": "0000_initial_1782099441682.png",
+      "eventIndex": 0
+    },
+    {
+      "id": "32f95e0c-4d77-4767-87de-f9866ee4b8de",
+      "sessionId": "3a174f2f-45af-45aa-85e4-f2ee714c0a30",
+      "timestamp": 1782099441870,
+      "path": "0001_navigation_1782099441870.png",
+      "eventIndex": 1
+    },
+    {
+      "id": "f69b465d-721c-45c3-bf2a-950c25ac40a4",
+      "sessionId": "3a174f2f-45af-45aa-85e4-f2ee714c0a30",
+      "timestamp": 1782099442373,
+      "path": "0004_input_1782099442373.png",
+      "eventIndex": 4
+    },
+    {
+      "id": "cf3df1ab-b330-4d83-859a-65d5e6637d64",
+      "sessionId": "3a174f2f-45af-45aa-85e4-f2ee714c0a30",
+      "timestamp": 1782099442719,
+      "path": "0006_input_1782099442719.png",
+      "eventIndex": 6
+    },
+    {
+      "id": "3d8411c9-7c81-4b98-ae79-5eab334a6313",
+      "sessionId": "3a174f2f-45af-45aa-85e4-f2ee714c0a30",
+      "timestamp": 1782099443068,
+      "path": "0008_input_1782099443068.png",
+      "eventIndex": 8
+    },
+    {
+      "id": "507b3e63-6f80-48d0-bc2a-9958d3f3ff8e",
+      "sessionId": "3a174f2f-45af-45aa-85e4-f2ee714c0a30",
+      "timestamp": 1782099443443,
+      "path": "0010_input_1782099443443.png",
+      "eventIndex": 10
+    },
+    {
+      "id": "25c0aacd-b789-464a-a803-55a3d53d66c1",
+      "sessionId": "3a174f2f-45af-45aa-85e4-f2ee714c0a30",
+      "timestamp": 1782099443475,
+      "path": "0010_final_1782099443475.png",
+      "eventIndex": 10
+    }
+  ],
+  "diffs": [
+    {
+      "id": "6d035e50-6dd1-4696-89ed-7073ee1368ac",
+      "baseScreenshot": {
+        "id": "683fec9d-f07e-4888-b728-29de586efd1d",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0000_initial_1782099429337.png",
+        "eventIndex": 0
+      },
+      "headScreenshot": {
+        "id": "fa61929a-c46d-4a3e-88df-b0510f134ee4",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0000_initial_1782099441682.png",
+        "eventIndex": 0
+      },
+      "pixelDifference": 331136,
+      "percentageDifference": 0.15969135802469137,
+      "threshold": 0.1,
+      "passed": false
+    },
+    {
+      "id": "2221e76a-850e-415a-ae79-054a950bc9aa",
+      "baseScreenshot": {
+        "id": "483254c1-46ff-4ac5-a704-923df81b5c7f",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0001_navigation_1782099429516.png",
+        "eventIndex": 1
+      },
+      "headScreenshot": {
+        "id": "f3f3a85f-5ba9-46cd-9513-4ee8b922b8fd",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0001_navigation_1782099441870.png",
+        "eventIndex": 1
+      },
+      "pixelDifference": 331136,
+      "percentageDifference": 0.15969135802469137,
+      "threshold": 0.1,
+      "passed": false
+    },
+    {
+      "id": "365c99e8-a912-4e8e-ad4f-fd5dd02d4b1c",
+      "baseScreenshot": {
+        "id": "7f914991-d93e-4840-b728-2d84a8b92839",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0004_input_1782099430037.png",
+        "eventIndex": 4
+      },
+      "headScreenshot": {
+        "id": "237c550d-7907-4859-af2e-667752092805",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0004_input_1782099442373.png",
+        "eventIndex": 4
+      },
+      "pixelDifference": 331136,
+      "percentageDifference": 0.15969135802469137,
+      "threshold": 0.1,
+      "passed": false
+    },
+    {
+      "id": "d9fcdb47-2ae9-4d22-a9c2-4197784da7d0",
+      "baseScreenshot": {
+        "id": "436eadb3-ab56-4c0d-93de-0203f69e82b2",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0006_input_1782099430375.png",
+        "eventIndex": 6
+      },
+      "headScreenshot": {
+        "id": "cce569ab-c464-4ad2-895c-bd0fd7b49c94",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0006_input_1782099442719.png",
+        "eventIndex": 6
+      },
+      "pixelDifference": 331136,
+      "percentageDifference": 0.15969135802469137,
+      "threshold": 0.1,
+      "passed": false
+    },
+    {
+      "id": "a50ba6d2-2d5e-4192-8d17-ba78ce5e6eef",
+      "baseScreenshot": {
+        "id": "61d5cc10-ba8b-4d0b-b1a2-979d6111bd24",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0008_input_1782099430715.png",
+        "eventIndex": 8
+      },
+      "headScreenshot": {
+        "id": "7bc5a81c-4a24-4aea-8953-2fc783b8d535",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0008_input_1782099443068.png",
+        "eventIndex": 8
+      },
+      "pixelDifference": 331136,
+      "percentageDifference": 0.15969135802469137,
+      "threshold": 0.1,
+      "passed": false
+    },
+    {
+      "id": "d2384a84-17a1-4c87-a767-0d9d01825524",
+      "baseScreenshot": {
+        "id": "a1992cf6-670f-462a-b626-d4590e05c5ca",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0010_final_1782099431079.png",
+        "eventIndex": 10
+      },
+      "headScreenshot": {
+        "id": "03a8860f-0836-4d54-a470-99551a9e7e8c",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0010_input_1782099443443.png",
+        "eventIndex": 10
+      },
+      "pixelDifference": 331136,
+      "percentageDifference": 0.15969135802469137,
+      "threshold": 0.1,
+      "passed": false
+    },
+    {
+      "id": "dad24d69-89c7-47ca-a8ac-19374f56dd83",
+      "baseScreenshot": {
+        "id": "54ae2b3c-1ff3-4522-80bb-339bae503cf6",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0010_input_1782099431053.png",
+        "eventIndex": 10
+      },
+      "headScreenshot": {
+        "id": "2d1ff50d-95da-4594-8ca4-e3f2cc25dc13",
+        "sessionId": "",
+        "timestamp": 0,
+        "path": "0010_input_1782099443443.png",
+        "eventIndex": 10
+      },
+      "pixelDifference": 331136,
+      "percentageDifference": 0.15969135802469137,
+      "threshold": 0.1,
+      "passed": false
+    }
+  ],
+  "createdAt": 1782099437398,
+  "isBaseline": false,
+  "targetOrigin": "http://localhost:9004",
+  "sourceOrigin": "http://localhost:9002"
+}
